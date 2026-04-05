@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recipe Popularity is Brutally Unequal</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1c1c1e;
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; padding: 24px;
+  }
+  .card {
+    background: #232326;
+    border-radius: 14px;
+    padding: 28px 32px 28px;
+    width: 100%;
+    max-width: 560px;
+  }
+  .section-label {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.09em;
+    text-transform: uppercase; color: #6e6e73; margin-bottom: 10px;
+  }
+  .title { font-size: 24px; font-weight: 700; color: #f0f0f5; line-height: 1.2; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #8e8e93; margin-bottom: 20px; }
+
+  /* Legend */
+  .legend { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  .leg-row { display: flex; gap: 20px; flex-wrap: wrap; }
+  .leg-item {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 13px; color: #c0c0c5; cursor: pointer;
+    padding: 3px 8px; border-radius: 6px;
+    transition: background 0.15s;
+  }
+  .leg-item:hover { background: rgba(255,255,255,0.06); }
+  .leg-item.dimmed { opacity: 0.35; }
+  .leg-dot { width: 11px; height: 11px; border-radius: 2px; flex-shrink: 0; }
+
+  .chart-wrap { position: relative; width: 100%; height: 280px; margin-bottom: 8px; }
+
+  .x-label {
+    text-align: center; font-size: 12px; color: #6e6e73;
+    margin-bottom: 20px; margin-top: 2px;
+  }
+
+  /* Pills */
+  .pills { display: flex; flex-direction: column; gap: 8px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 14px; border-radius: 22px; font-size: 13px;
+    font-weight: 500; cursor: default; width: fit-content;
+    transition: transform 0.15s, box-shadow 0.15s;
+    border: 1.5px solid transparent;
+  }
+  .pill:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+  .pill-red  { background: rgba(224,82,82,0.15);  border-color: rgba(224,82,82,0.5);  color: #ff8080; }
+  .pill-blue { background: rgba(55,138,221,0.15); border-color: rgba(55,138,221,0.5); color: #7ab8f5; }
+
+  /* Tooltip */
+  .tooltip-box {
+    position: absolute; pointer-events: none;
+    background: #2c2c2f; border: 1px solid #3a3a3e;
+    border-radius: 8px; padding: 9px 13px;
+    font-size: 12px; color: #e0e0e5;
+    z-index: 10; display: none;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    white-space: nowrap;
+  }
+  .tooltip-box .tt-label { font-weight: 700; margin-bottom: 3px; }
+  .tooltip-box .tt-count { color: #8e8e93; font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="section-label">Power Law</div>
+  <div class="title">Recipe popularity is brutally unequal</div>
+  <div class="subtitle">How many ratings each recipe received</div>
+
+  <div class="legend">
+    <div class="leg-row">
+      <div class="leg-item" id="leg-0" onclick="toggleTier('obscure')">
+        <span class="leg-dot" style="background:#e05252;"></span>Obscure (1 rating)
+      </div>
+      <div class="leg-item" id="leg-1" onclick="toggleTier('moderate')">
+        <span class="leg-dot" style="background:#f0a030;"></span>Moderate (2–25)
+      </div>
+    </div>
+    <div class="leg-row">
+      <div class="leg-item" id="leg-2" onclick="toggleTier('popular')">
+        <span class="leg-dot" style="background:#639922;"></span>Popular (26+)
+      </div>
+    </div>
+  </div>
+
+  <div class="chart-wrap">
+    <canvas id="chart"></canvas>
+    <div class="tooltip-box" id="tooltip">
+      <div class="tt-label" id="tt-label"></div>
+      <div id="tt-pct"></div>
+      <div class="tt-count" id="tt-count"></div>
+    </div>
+  </div>
+  <div class="x-label"># of ratings received</div>
+
+  <div class="pills">
+    <div class="pill pill-red">41% of recipes rated exactly once</div>
+    <div class="pill pill-blue">0.25% got 100+ ratings</div>
+  </div>
+</div>
+
+<script>
+// Exact data from interactions_train.csv
+// Total unique recipes: 160,901
+const totalRecipes = 160901;
+const data = [
+  { label: '1',      count: 66478, pct: 41.32, tier: 'obscure',  color: '#e05252' },
+  { label: '2',      count: 31808, pct: 19.77, tier: 'moderate', color: '#f0a030' },
+  { label: '3–5',    count: 35597, pct: 22.12, tier: 'moderate', color: '#f0a030' },
+  { label: '6–10',   count: 15898, pct: 9.88,  tier: 'moderate', color: '#f0a030' },
+  { label: '11–25',  count: 8015,  pct: 4.98,  tier: 'moderate', color: '#f0a030' },
+  { label: '26–100', count: 2703,  pct: 1.68,  tier: 'popular',  color: '#639922' },
+  { label: '101+',   count: 402,   pct: 0.25,  tier: 'popular',  color: '#639922' },
+];
+
+let hiddenTiers = new Set();
+
+const chart = new Chart(document.getElementById('chart'), {
+  type: 'bar',
+  data: {
+    labels: data.map(d => d.label),
+    datasets: [{
+      data: data.map(d => d.pct),
+      backgroundColor: data.map(d => d.color + 'cc'),
+      hoverBackgroundColor: data.map(d => d.color),
+      borderRadius: 5,
+      borderSkipped: false,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { enabled: false },
+    },
+    onHover(evt, elements) {
+      const tip = document.getElementById('tooltip');
+      if (!elements.length) { tip.style.display = 'none'; return; }
+      const i = elements[0].index;
+      const d = data[i];
+      document.getElementById('tt-label').textContent  = d.label + ' rating' + (d.label === '1' ? '' : 's') + ' received';
+      document.getElementById('tt-pct').textContent    = d.pct.toFixed(2) + '% of all recipes';
+      document.getElementById('tt-count').textContent  = d.count.toLocaleString() + ' recipes';
+
+      const cardRect = document.querySelector('.card').getBoundingClientRect();
+      tip.style.display = 'block';
+      let left = evt.native.clientX - cardRect.left + 12;
+      let top  = evt.native.clientY - cardRect.top  - 65;
+      if (left + 220 > cardRect.width) left = cardRect.width - 225;
+      tip.style.left = left + 'px';
+      tip.style.top  = top  + 'px';
+    },
+    scales: {
+      x: {
+        ticks: { color: '#6e6e73', font: { size: 12 } },
+        grid: { color: 'rgba(255,255,255,0.07)' },
+        border: { color: 'transparent' },
+      },
+      y: {
+        min: 0, max: 45,
+        ticks: {
+          color: '#6e6e73', font: { size: 11 },
+          callback: v => v + '%',
+          stepSize: 10,
+        },
+        grid: { color: 'rgba(255,255,255,0.07)' },
+        border: { color: 'transparent' },
+      }
+    },
+    animation: { duration: 500, easing: 'easeOutQuart' },
+  }
+});
+
+function toggleTier(tier) {
+  const legMap = { obscure: 'leg-0', moderate: 'leg-1', popular: 'leg-2' };
+  const legEl  = document.getElementById(legMap[tier]);
+
+  if (hiddenTiers.has(tier)) {
+    hiddenTiers.delete(tier);
+    legEl.classList.remove('dimmed');
+  } else {
+    hiddenTiers.add(tier);
+    legEl.classList.add('dimmed');
+  }
+
+  chart.data.datasets[0].backgroundColor = data.map(d =>
+    hiddenTiers.has(d.tier) ? 'rgba(255,255,255,0.05)' : d.color + 'cc'
+  );
+  chart.data.datasets[0].hoverBackgroundColor = data.map(d =>
+    hiddenTiers.has(d.tier) ? 'rgba(255,255,255,0.08)' : d.color
+  );
+  chart.update();
+}
+
+document.getElementById('chart').addEventListener('mouseleave', () => {
+  document.getElementById('tooltip').style.display = 'none';
+});
+</script>
+</body>
+</html>
