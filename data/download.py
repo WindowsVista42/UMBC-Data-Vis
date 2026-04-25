@@ -19,7 +19,8 @@ def convert_recipes_to_jsonl(dest):
 
 def main():
     path = kagglehub.dataset_download("shuyangli94/food-com-recipes-and-user-interactions")
-    dest = os.path.dirname(os.path.abspath(__file__))
+    dest = os.path.join(os.path.dirname(os.path.abspath(__file__)), "raw")
+    os.makedirs(dest)
     for file in os.listdir(path):
         shutil.copy2(os.path.join(path, file), os.path.join(dest, file))
     print("Downloaded files to:", dest)
