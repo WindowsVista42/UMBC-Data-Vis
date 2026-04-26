@@ -1,0 +1,29 @@
+[project]
+name = "data"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12, <3.13"
+dependencies = [
+    "kagglehub",
+    "pandas",
+    "plotly>=6.7.0",
+    "sentence-transformers",
+    "torch",
+    "umap-learn",
+]
+
+[tool.uv]
+index-strategy = "unsafe-best-match"
+
+[tool.uv.sources]
+torch = { index = "pytorch" }
+
+[[tool.uv.index]]
+url = "https://download.pytorch.org/whl/cu121"
+name = "pytorch"
+
+[[tool.uv.index]]
+url = "https://pypi.org/simple"
+name = "pypi"
+default = true

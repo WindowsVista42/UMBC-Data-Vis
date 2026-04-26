@@ -1,0 +1,9 @@
+*.csv
+*.jsonl
+*.npy
+*.pkl
+*.json
+!pipeline/embed_config.json
+__pycache__
+*.html
+*.txt

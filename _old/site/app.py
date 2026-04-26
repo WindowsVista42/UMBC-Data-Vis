@@ -448,7 +448,7 @@ elif page == "🧄  Ingredient Trends":
             height=max(400, top_n_ingr * 22),
         )
         fig.update_layout(
-            plot_bgcolor="white", paper_bgcolor="white",
+            # plot_bgcolor="white", paper_bgcolor="white",
             coloraxis_showscale=False, margin=dict(l=0, r=0, t=10, b=0),
             yaxis=dict(tickfont=dict(size=11)),
         )
@@ -483,7 +483,7 @@ elif page == "🧄  Ingredient Trends":
         )
         fig2.update_layout(
             margin=dict(l=0, r=0, t=20, b=0), height=520,
-            paper_bgcolor="white",
+            paper_bgcolor="black",
         )
         st.plotly_chart(fig2, use_container_width=True)
 
