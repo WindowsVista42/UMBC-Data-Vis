@@ -60,8 +60,10 @@ def parse_args():
                         help="Explicit proba .npy paths to use. Defaults to auto-detecting all "
                              "*_proba.npy files in the pipeline directory.")
     parser.add_argument("--category-weight",  type=float, default=0.5,
-                        help="Weight applied to each proba vector before concatenation. "
-                             "0 disables augmentation. (default: 0.5)")
+                        help="Default weight for all category vectors. Overridden per-file "
+                             "by --weights config. 0 disables augmentation. (default: 0.5)")
+    parser.add_argument("--weights", default=os.path.join(SCRIPT_DIR, "projection_weights.json"),
+                        help="Path to per-file weight config JSON (default: pipeline/projection_weights.json)")
     return parser.parse_args()
 
 
@@ -94,6 +96,17 @@ def main():
         index = index[:n]
         print(f"  Using first {n:,} rows (--max-rows)")
 
+    # Load per-file weights config if present
+    weight_config = {}
+    if os.path.exists(args.weights):
+        with open(args.weights, encoding="utf-8") as f:
+            weight_config = json.load(f)
+        print(f"Loaded weights config from {args.weights}")
+
+    def get_weight(path):
+        stem = os.path.splitext(os.path.basename(path))[0].removeprefix("recipes_")
+        return float(weight_config.get(stem, weight_config.get("default", args.category_weight)))
+
     if args.category_weight > 0:
         proba_paths = args.proba if args.proba is not None else find_proba_files()
         proba_paths = [p for p in proba_paths if os.path.exists(p)]
@@ -101,12 +114,13 @@ def main():
         if proba_paths:
             parts = [embeddings]
             for path in proba_paths:
-                proba = np.load(path)
+                proba  = np.load(path)
                 if args.max_rows:
                     proba = proba[:n]
-                parts.append(args.category_weight * proba)
+                weight = get_weight(path)
+                parts.append(weight * proba)
                 name = os.path.basename(path)
-                print(f"  + {name}  ({proba.shape[1]} classes, weight={args.category_weight})")
+                print(f"  + {name}  ({proba.shape[1]} classes, weight={weight})")
             embeddings = np.concatenate(parts, axis=1)
             print(f"  Augmented shape: {embeddings.shape}")
         else:

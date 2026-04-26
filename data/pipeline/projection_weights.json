@@ -1,0 +1,7 @@
+{
+  "default": 0.5,
+  "cuisines_proba": 4.0,
+  "meal_types_proba": 0.8,
+  "n_steps_features": 0.5,
+  "minutes_features": 1.0
+}
