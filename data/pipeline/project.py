@@ -4,10 +4,14 @@ Project recipe embeddings to 2D or 3D using UMAP for visualization.
 Reads the embedding matrix from embed.py and runs a single UMAP pass to
 2D or 3D coordinates suitable for a point cloud visualization.
 
-If a cuisine probability matrix from assign.py is present, it is concatenated
-to the embeddings before projection: concat(embedding, cuisine_weight * proba).
-This pulls same-cuisine recipes together in the projection while preserving
-within-cuisine variation. Set --cuisine-weight 0 to disable.
+All *_proba.npy files in the pipeline directory (output of assign.py) are
+auto-detected and concatenated to the embeddings before projection:
+
+  concat(embedding, category_weight * proba_cuisines, category_weight * proba_meal_types, ...)
+
+This pulls same-category recipes together in the projection. Set
+--category-weight 0 to disable, or pass explicit --proba paths to override
+auto-detection.
 
 Outputs:
   recipes_umap{N}d.npy         (N, 2|3) float32
@@ -16,14 +20,16 @@ Outputs:
 Usage:
     uv run pipeline/project.py
     uv run pipeline/project.py --dims 2
-    uv run pipeline/project.py --cuisine-weight 0.5
-    uv run pipeline/project.py --cuisine-weight 0
+    uv run pipeline/project.py --category-weight 0.5
+    uv run pipeline/project.py --category-weight 0
+    uv run pipeline/project.py --proba pipeline/recipes_cuisines_proba.npy
     uv run pipeline/project.py --random-state 42
     uv run pipeline/project.py --max-rows 10000
     uv run pipeline/project.py --neighbors 30 --min-dist 0.05
 """
 
 import argparse
+import glob
 import json
 import os
 import sys
@@ -32,29 +38,39 @@ import time
 import numpy as np
 import umap
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR            = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_EMBEDDINGS    = os.path.join(SCRIPT_DIR, "recipes_embeddings.npy")
 DEFAULT_INDEX         = os.path.join(SCRIPT_DIR, "recipes_index.json")
 DEFAULT_OUTPUT_PREFIX = os.path.join(SCRIPT_DIR, "recipes")
-DEFAULT_PROBA         = os.path.join(SCRIPT_DIR, "recipes_cuisines_proba.npy")
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--embeddings", default=DEFAULT_EMBEDDINGS, help="Path to embeddings .npy file")
-    parser.add_argument("--index", default=DEFAULT_INDEX, help="Path to index .json file")
-    parser.add_argument("--output-prefix", default=DEFAULT_OUTPUT_PREFIX, help="Prefix for output files")
-    parser.add_argument("--dims", type=int, default=3, choices=[2, 3], help="Output dimensions (default: 3)")
-    parser.add_argument("--neighbors", type=int, default=15, help="UMAP n_neighbors (default: 15)")
-    parser.add_argument("--min-dist", type=float, default=0.1, help="UMAP min_dist (default: 0.1)")
-    parser.add_argument("--metric", default="cosine", help="Distance metric (default: cosine)")
-    parser.add_argument("--n-jobs", type=int, default=-1, help="Parallel jobs, -1 = all cores (default: -1)")
-    parser.add_argument("--random-state", type=int, default=None, help="Random seed for reproducibility (disables multi-core)")
-    parser.add_argument("--max-rows", type=int, default=None, help="Use only first N rows (for testing)")
-    parser.add_argument("--proba", default=DEFAULT_PROBA, help="Path to cuisine proba .npy from assign.py (default: auto-detect)")
-    parser.add_argument("--cuisine-weight", type=float, default=0.5,
-                        help="Weight of cuisine proba vector appended to embedding. 0 disables. (default: 0.5)")
+    parser.add_argument("--embeddings",       default=DEFAULT_EMBEDDINGS, help="Path to embeddings .npy file")
+    parser.add_argument("--index",            default=DEFAULT_INDEX,      help="Path to index .json file")
+    parser.add_argument("--output-prefix",    default=DEFAULT_OUTPUT_PREFIX, help="Prefix for output files")
+    parser.add_argument("--dims",             type=int, default=3, choices=[2, 3], help="Output dimensions (default: 3)")
+    parser.add_argument("--neighbors",        type=int, default=15,   help="UMAP n_neighbors (default: 15)")
+    parser.add_argument("--min-dist",         type=float, default=0.1, help="UMAP min_dist (default: 0.1)")
+    parser.add_argument("--metric",           default="cosine",        help="Distance metric (default: cosine)")
+    parser.add_argument("--n-jobs",           type=int, default=-1,    help="Parallel jobs, -1 = all cores (default: -1)")
+    parser.add_argument("--random-state",     type=int, default=None,  help="Random seed for reproducibility")
+    parser.add_argument("--max-rows",         type=int, default=None,  help="Use only first N rows (for testing)")
+    parser.add_argument("--proba",            nargs="*", default=None,
+                        help="Explicit proba .npy paths to use. Defaults to auto-detecting all "
+                             "*_proba.npy files in the pipeline directory.")
+    parser.add_argument("--category-weight",  type=float, default=0.5,
+                        help="Weight applied to each proba vector before concatenation. "
+                             "0 disables augmentation. (default: 0.5)")
     return parser.parse_args()
+
+
+def find_proba_files():
+    """Auto-detect all *_proba.npy and *_features.npy files in the pipeline directory."""
+    return sorted(
+        glob.glob(os.path.join(SCRIPT_DIR, "*_proba.npy")) +
+        glob.glob(os.path.join(SCRIPT_DIR, "*_features.npy"))
+    )
 
 
 def main():
@@ -78,15 +94,23 @@ def main():
         index = index[:n]
         print(f"  Using first {n:,} rows (--max-rows)")
 
-    if args.cuisine_weight > 0 and os.path.exists(args.proba):
-        print(f"\nLoading cuisine probabilities from {args.proba}...")
-        proba = np.load(args.proba)
-        if args.max_rows:
-            proba = proba[:n]
-        embeddings = np.concatenate([embeddings, args.cuisine_weight * proba], axis=1)
-        print(f"  Augmented embedding shape: {embeddings.shape}  (cuisine_weight={args.cuisine_weight})")
-    elif args.cuisine_weight > 0:
-        print(f"\nNo cuisine proba found at {args.proba} - running without augmentation")
+    if args.category_weight > 0:
+        proba_paths = args.proba if args.proba is not None else find_proba_files()
+        proba_paths = [p for p in proba_paths if os.path.exists(p)]
+
+        if proba_paths:
+            parts = [embeddings]
+            for path in proba_paths:
+                proba = np.load(path)
+                if args.max_rows:
+                    proba = proba[:n]
+                parts.append(args.category_weight * proba)
+                name = os.path.basename(path)
+                print(f"  + {name}  ({proba.shape[1]} classes, weight={args.category_weight})")
+            embeddings = np.concatenate(parts, axis=1)
+            print(f"  Augmented shape: {embeddings.shape}")
+        else:
+            print("No proba files found - running without augmentation")
 
     print(f"\nRunning UMAP: {embeddings.shape[1]}D -> {args.dims}D")
     print(f"  neighbors={args.neighbors}, min_dist={args.min_dist}, metric={args.metric}, "
@@ -107,7 +131,7 @@ def main():
     print(f"  Done in {elapsed/60:.1f} min")
 
     coords_path = args.output_prefix + f"_umap{args.dims}d.npy"
-    index_path = args.output_prefix + f"_umap{args.dims}d_index.json"
+    index_path  = args.output_prefix + f"_umap{args.dims}d_index.json"
 
     np.save(coords_path, coords)
     print(f"Saved {coords_path}  shape={coords.shape}")

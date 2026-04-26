@@ -48,11 +48,15 @@ def parse_args():
     parser.add_argument("categories",    help="Path to .txt file with one cuisine tag per line")
     parser.add_argument("--embeddings",  default=DEFAULT_EMBEDDINGS, help="Path to recipes_embeddings.npy")
     parser.add_argument("--index",       default=DEFAULT_INDEX,      help="Path to recipes_index.json")
-    parser.add_argument("--taxonomy",    default=DEFAULT_TAXONOMY,   help="Path to cuisine_taxonomy.json")
+    parser.add_argument("--taxonomy",    default=None,
+                        help="Path to taxonomy JSON (default: auto-derived from categories filename)")
     parser.add_argument("--n-neighbors", type=int, default=100,
                         help="Number of neighbors (default: 100)")
     parser.add_argument("--min-score",   type=float, default=0.0,
                         help="Minimum probability to assign a category. Below this gets null. (default: 0.0)")
+    parser.add_argument("--no-prior-correction", action="store_true",
+                        help="Disable prior correction (by default, class frequencies are divided out to "
+                             "remove imbalance bias from the KNN posterior)")
     return parser.parse_args()
 
 
@@ -89,13 +93,16 @@ def main():
     cuisine_set = set(categories)
     print(f"Categories ({len(categories)}): {', '.join(categories)}")
 
+    base     = os.path.splitext(os.path.basename(args.categories))[0]
+    taxonomy_path = args.taxonomy or os.path.join(SCRIPT_DIR, f"{base}_taxonomy.json")
+
     parent_of = {}
-    if os.path.exists(args.taxonomy):
-        with open(args.taxonomy, encoding="utf-8") as f:
+    if os.path.exists(taxonomy_path):
+        with open(taxonomy_path, encoding="utf-8") as f:
             parent_of = json.load(f).get("parent_of", {})
-        print(f"Taxonomy loaded ({len(parent_of)} parent-child relationships)")
+        print(f"Taxonomy loaded from {taxonomy_path} ({len(parent_of)} parent-child relationships)")
     else:
-        print("No taxonomy found - treating all categories as equal specificity")
+        print(f"No taxonomy found at {taxonomy_path} - treating all categories as equal specificity")
 
     print(f"\nLoading embeddings...")
     embeddings = np.load(args.embeddings)
@@ -176,8 +183,18 @@ def main():
             proba_row[class_to_idx[y_train[ni]]] += w
         probs[row_idx] = proba_row
 
+    # Prior correction: divide out class frequencies to remove imbalance bias.
+    # KNN posteriors bake in the training distribution as an implicit prior.
+    # Dividing by priors converts to a likelihood: P(x|class) ∝ P(class|x) / P(class).
+    if not args.no_prior_correction:
+        freq   = Counter(y_train)
+        priors = np.array([freq[c] / len(y_train) for c in clf.classes_], dtype=np.float32)
+        probs  = probs / priors
+        probs /= probs.sum(axis=1, keepdims=True)
+        print(f"Prior correction applied  (priors: { {c: round(freq[c]/len(y_train), 3) for c in clf.classes_} })")
+
     # Build output
-    top3      = np.argsort(probs, axis=1)[:, -3:][:, ::-1]
+    top3        = np.argsort(probs, axis=1)[:, -3:][:, ::-1]
     top3_scores = probs[np.arange(len(probs))[:, None], top3]
 
     results = []

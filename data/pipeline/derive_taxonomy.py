@@ -1,37 +1,43 @@
 """
-Derive parent-child relationships between cuisine tags from co-occurrence data.
+Derive parent-child relationships between tags from co-occurrence data.
 
-For every pair of tags in cuisines.txt, checks what percentage of recipes
-with tag A also have tag B. If A is always a subset of B, A is a child of B.
+For every pair of tags in the given .txt file, checks what percentage of
+recipes with tag A also have tag B. If A is always a subset of B, A is a
+child of B.
 
-Outputs pipeline/cuisine_taxonomy.json for use by the classifier, and
-pipeline/cuisine_taxonomy.txt as a human-readable report to cross-reference.
+Output filenames are derived from the input filename:
+  cuisines.txt   -> cuisine_taxonomy.json, cuisine_taxonomy.txt
+  meal_types.txt -> meal_types_taxonomy.json, meal_types_taxonomy.txt
 
 Usage:
-    uv run pipeline/derive_taxonomy.py
+    uv run pipeline/derive_taxonomy.py pipeline/cuisines.txt
+    uv run pipeline/derive_taxonomy.py pipeline/meal_types.txt
 """
 
+import argparse
 import json
 import os
 from collections import Counter, defaultdict
 
-SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
-JSONL_PATH   = os.path.join(SCRIPT_DIR, "..", "raw", "RAW_recipes.jsonl")
-CUISINES_TXT = os.path.join(SCRIPT_DIR, "cuisines.txt")
-OUT_JSON     = os.path.join(SCRIPT_DIR, "cuisine_taxonomy.json")
-OUT_TXT      = os.path.join(SCRIPT_DIR, "cuisine_taxonomy.txt")
-
-# A tag is considered a child of another if this % of its recipes also have the parent
+SCRIPT_DIR      = os.path.dirname(os.path.abspath(__file__))
+JSONL_PATH      = os.path.join(SCRIPT_DIR, "..", "raw", "RAW_recipes.jsonl")
 CHILD_THRESHOLD = 0.99
 
 
-def load_cuisines():
-    with open(CUISINES_TXT, encoding="utf-8") as f:
-        return [line.strip() for line in f if line.strip()]
+def parse_args():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("categories", help="Path to .txt file with one tag per line")
+    return parser.parse_args()
 
 
 def main():
-    cuisines = load_cuisines()
+    args     = parse_args()
+    base     = os.path.splitext(os.path.basename(args.categories))[0]
+    out_json = os.path.join(SCRIPT_DIR, f"{base}_taxonomy.json")
+    out_txt  = os.path.join(SCRIPT_DIR, f"{base}_taxonomy.txt")
+
+    with open(args.categories, encoding="utf-8") as f:
+        cuisines = [line.strip() for line in f if line.strip()]
     cuisine_set = set(cuisines)
 
     # Count individual tags and co-occurrences
@@ -86,7 +92,7 @@ def main():
 
     # --- Write human-readable report ---
     lines = []
-    lines.append("CUISINE TAXONOMY REPORT")
+    lines.append(f"TAXONOMY REPORT: {base}")
     lines.append("=" * 60)
     lines.append("")
     lines.append("Parent-child relationships (>= 99% co-occurrence):")
@@ -123,19 +129,18 @@ def main():
     report = "\n".join(lines)
     print(report)
 
-    with open(OUT_TXT, "w", encoding="utf-8") as f:
+    with open(out_txt, "w", encoding="utf-8") as f:
         f.write(report + "\n")
-    print(f"\nSaved {OUT_TXT}")
+    print(f"\nSaved {out_txt}")
 
-    # --- Write JSON for classifier use ---
     taxonomy = {
         "parent_of": parent_of,
         "children":  {k: sorted(v) for k, v in children.items()},
         "counts":    {tag: tag_counts[tag] for tag in cuisines},
     }
-    with open(OUT_JSON, "w", encoding="utf-8") as f:
+    with open(out_json, "w", encoding="utf-8") as f:
         json.dump(taxonomy, f, indent=2)
-    print(f"Saved {OUT_JSON}")
+    print(f"Saved {out_json}")
 
 
 if __name__ == "__main__":
