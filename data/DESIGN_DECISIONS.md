@@ -94,3 +94,49 @@ The pipeline is split into independent scripts (embed, assign, project, tag_enco
 - UMAP can be re-projected with different parameters or a different set of category files without re-embedding
 
 The tradeoff is more files on disk, but the cost is low given that outputs are gitignored.
+
+---
+
+## Consistent JSON output across all encoding scripts
+
+All encoding scripts (`assign.py`, `tag_encode.py`, `numeric_encode.py`) output a per-recipe JSON file in the same format:
+
+```json
+[{"id": 137739, "category": "mexican", "score": 0.72, "runners_up": [...]}]
+```
+
+This means `preview.py` only needs to know about one format regardless of how the categories were produced. The `.npy` files exist solely for UMAP augmentation in `project.py`. `numeric_encode.py` with `type: normalize` skips the JSON output because a continuous normalized value is not a categorical assignment and cannot be meaningfully colored in the preview.
+
+---
+
+## Cook time: numeric minutes over tag-based bins
+
+Initially cook time was encoded via `tag_encode.py` using tags like `15-minutes-or-less`. This was replaced with `numeric_encode.py` using the raw `minutes` field with soft bins. The raw numeric value is more precise and doesn't depend on whether the recipe contributor remembered to add the tag. Outliers (e.g. multi-day fermentation recipes claiming 4000+ minutes) are handled naturally by soft binning — they all get full weight on the last bin.
+
+---
+
+## Minutes and n_steps collinearity
+
+The `minutes` and `n_steps` features are correlated — more steps generally means more time. Including both in the UMAP augmentation doubles the "recipe complexity" signal and causes that dimension to dominate the projection. `minutes` also has more severe outliers than `n_steps`. The recommended approach is to use only one of the two, or to set a very low weight for `minutes` in `projection_weights.json`.
+
+---
+
+## Per-file projection weights
+
+Different category signals have different levels of relevance and different natural scales. A single global weight applied to all proba/feature vectors causes whichever signal has the most variance to dominate the projection. `projection_weights.json` allows tuning each input file independently. The key is the filename stem without the `recipes_` prefix and `.npy` extension (e.g. `"cuisines_proba": 1.0`). A `"default"` key covers any file not explicitly listed.
+
+---
+
+## Preview HTML file size and max-rows
+
+The preview generates a static standalone HTML file. With one trace per category label per family (required for legend click-to-filter to work in plotly), every family's traces are embedded in the HTML even when hidden. Hover text is the dominant cost — at ~300 chars per point, 231k points across 4 families produces a ~500 MB file that browsers cannot load.
+
+The fix is `--max-rows` (default 50k), which keeps the file around 65 MB. At 50k points the structure of the projection is still clearly visible. Run with a higher value if you need to inspect specific sparse regions, but expect slower load times above 100k points.
+
+---
+
+## Preview: one trace per label, not one trace per family
+
+An earlier version of the preview used a single scatter trace per category family with the color array swapped via the dropdown. This kept the HTML small but broke plotly's built-in legend click behavior — clicking a legend entry only toggled the empty dummy trace, not the actual data points.
+
+The current approach uses one trace per category label per family. This is the only way to get native legend click-to-filter behavior in plotly without custom JavaScript. The file size cost is managed with `--max-rows`.
