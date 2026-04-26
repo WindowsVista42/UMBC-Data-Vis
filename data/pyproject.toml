@@ -5,9 +5,11 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12, <3.13"
 dependencies = [
+    "dracopy>=2.0.0",
     "kagglehub",
     "pandas",
     "plotly>=6.7.0",
+    "pymorton>=1.0.5",
     "sentence-transformers",
     "torch",
     "umap-learn",
