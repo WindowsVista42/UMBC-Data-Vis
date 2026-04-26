@@ -158,6 +158,24 @@ def main():
         print(f"  {end:,} / {len(index):,}", flush=True)
     probs = np.vstack(all_probs)  # (N, n_classes)
 
+    # For tagged recipes, replace self-inclusive probabilities with leave-one-out
+    # (k+1 neighbors, drop self at distance 0, recompute weighted proba)
+    print("Computing leave-one-out probabilities for tagged recipes...")
+    class_to_idx   = {c: i for i, c in enumerate(clf.classes_)}
+    tagged_row_idx = [id_to_idx[rid] for rid in train_ids if rid in id_to_idx]
+    loo_distances, loo_neighbors = clf.kneighbors(X_train, n_neighbors=k + 1)
+    loo_distances = loo_distances[:, 1:]   # drop self (distance 0)
+    loo_neighbors = loo_neighbors[:, 1:]   # drop self
+
+    for i, row_idx in enumerate(tagged_row_idx):
+        dists   = loo_distances[i]
+        weights = 1.0 / np.maximum(dists, 1e-10)
+        weights /= weights.sum()
+        proba_row = np.zeros(len(clf.classes_), dtype=np.float32)
+        for w, ni in zip(weights, loo_neighbors[i]):
+            proba_row[class_to_idx[y_train[ni]]] += w
+        probs[row_idx] = proba_row
+
     # Build output
     top3      = np.argsort(probs, axis=1)[:, -3:][:, ::-1]
     top3_scores = probs[np.arange(len(probs))[:, None], top3]
@@ -176,10 +194,21 @@ def main():
             ],
         })
 
-    out = output_path(args.categories)
+    base        = output_path(args.categories).replace(".json", "")
+    out         = base + ".json"
+    proba_out   = base + "_proba.npy"
+    classes_out = base + "_classes.json"
+
     with open(out, "w", encoding="utf-8") as f:
         json.dump(results, f, separators=(",", ":"))
     print(f"\nSaved {out}  ({len(results):,} entries)")
+
+    np.save(proba_out, probs.astype(np.float32))
+    print(f"Saved {proba_out}  shape={probs.shape}")
+
+    with open(classes_out, "w", encoding="utf-8") as f:
+        json.dump(list(clf.classes_), f)
+    print(f"Saved {classes_out}")
 
     dist = Counter(r["category"] for r in results)
     print(f"\nDistribution:")

@@ -2,8 +2,12 @@
 Project recipe embeddings to 2D or 3D using UMAP for visualization.
 
 Reads the embedding matrix from embed.py and runs a single UMAP pass to
-2D or 3D coordinates suitable for a point cloud visualization. Cuisine
-assignment (assign.py) operates on the original embeddings, not these coords.
+2D or 3D coordinates suitable for a point cloud visualization.
+
+If a cuisine probability matrix from assign.py is present, it is concatenated
+to the embeddings before projection: concat(embedding, cuisine_weight * proba).
+This pulls same-cuisine recipes together in the projection while preserving
+within-cuisine variation. Set --cuisine-weight 0 to disable.
 
 Outputs:
   recipes_umap{N}d.npy         (N, 2|3) float32
@@ -12,6 +16,8 @@ Outputs:
 Usage:
     uv run pipeline/project.py
     uv run pipeline/project.py --dims 2
+    uv run pipeline/project.py --cuisine-weight 0.5
+    uv run pipeline/project.py --cuisine-weight 0
     uv run pipeline/project.py --random-state 42
     uv run pipeline/project.py --max-rows 10000
     uv run pipeline/project.py --neighbors 30 --min-dist 0.05
@@ -27,9 +33,10 @@ import numpy as np
 import umap
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_EMBEDDINGS = os.path.join(SCRIPT_DIR, "recipes_embeddings.npy")
-DEFAULT_INDEX = os.path.join(SCRIPT_DIR, "recipes_index.json")
+DEFAULT_EMBEDDINGS    = os.path.join(SCRIPT_DIR, "recipes_embeddings.npy")
+DEFAULT_INDEX         = os.path.join(SCRIPT_DIR, "recipes_index.json")
 DEFAULT_OUTPUT_PREFIX = os.path.join(SCRIPT_DIR, "recipes")
+DEFAULT_PROBA         = os.path.join(SCRIPT_DIR, "recipes_cuisines_proba.npy")
 
 
 def parse_args():
@@ -44,6 +51,9 @@ def parse_args():
     parser.add_argument("--n-jobs", type=int, default=-1, help="Parallel jobs, -1 = all cores (default: -1)")
     parser.add_argument("--random-state", type=int, default=None, help="Random seed for reproducibility (disables multi-core)")
     parser.add_argument("--max-rows", type=int, default=None, help="Use only first N rows (for testing)")
+    parser.add_argument("--proba", default=DEFAULT_PROBA, help="Path to cuisine proba .npy from assign.py (default: auto-detect)")
+    parser.add_argument("--cuisine-weight", type=float, default=0.5,
+                        help="Weight of cuisine proba vector appended to embedding. 0 disables. (default: 0.5)")
     return parser.parse_args()
 
 
@@ -67,6 +77,16 @@ def main():
         embeddings = embeddings[:n]
         index = index[:n]
         print(f"  Using first {n:,} rows (--max-rows)")
+
+    if args.cuisine_weight > 0 and os.path.exists(args.proba):
+        print(f"\nLoading cuisine probabilities from {args.proba}...")
+        proba = np.load(args.proba)
+        if args.max_rows:
+            proba = proba[:n]
+        embeddings = np.concatenate([embeddings, args.cuisine_weight * proba], axis=1)
+        print(f"  Augmented embedding shape: {embeddings.shape}  (cuisine_weight={args.cuisine_weight})")
+    elif args.cuisine_weight > 0:
+        print(f"\nNo cuisine proba found at {args.proba} - running without augmentation")
 
     print(f"\nRunning UMAP: {embeddings.shape[1]}D -> {args.dims}D")
     print(f"  neighbors={args.neighbors}, min_dist={args.min_dist}, metric={args.metric}, "
