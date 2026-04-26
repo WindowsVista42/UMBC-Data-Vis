@@ -1,0 +1,51 @@
+{
+  "parent_of": {
+    "southern-united-states": "american",
+    "southwestern-united-states": "american",
+    "midwestern": "american",
+    "northeastern-united-states": "american",
+    "tex-mex": "southwestern-united-states",
+    "cajun": "southern-united-states"
+  },
+  "children": {
+    "american": [
+      "midwestern",
+      "northeastern-united-states",
+      "southern-united-states",
+      "southwestern-united-states"
+    ],
+    "southwestern-united-states": [
+      "tex-mex"
+    ],
+    "southern-united-states": [
+      "cajun"
+    ]
+  },
+  "counts": {
+    "american": 31179,
+    "italian": 7410,
+    "southern-united-states": 7114,
+    "mexican": 6694,
+    "canadian": 4572,
+    "southwestern-united-states": 3536,
+    "midwestern": 2884,
+    "african": 2851,
+    "australian": 2845,
+    "indian": 2708,
+    "northeastern-united-states": 2566,
+    "greek": 2391,
+    "french": 2268,
+    "middle-eastern": 2067,
+    "chinese": 2008,
+    "central-american": 1818,
+    "english": 1744,
+    "caribbean": 1709,
+    "tex-mex": 1476,
+    "german": 1377,
+    "scandinavian": 1294,
+    "south-american": 1255,
+    "thai": 1208,
+    "cajun": 1206,
+    "spanish": 1072
+  }
+}
