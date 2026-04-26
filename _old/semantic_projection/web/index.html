@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>arXiv Papers · 3D UMAP</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.168.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.168.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+
+  <canvas id="three-canvas"></canvas>
+
+  <!-- ── Floating controls (top-left) ── -->
+  <div id="float-controls">
+    <div class="fc-group">
+      <div class="fc-label-head">CAMERA</div>
+      <div class="fc-row">
+        <button class="fc-btn" id="fc-reset">&#8635; Reset</button>
+        <button class="fc-btn" id="fc-top">Top</button>
+        <button class="fc-btn" id="fc-front">Front</button>
+        <button class="fc-btn" id="fc-side">Side</button>
+      </div>
+      <div class="fc-hint">Drag · Scroll zoom · Shift+drag pan</div>
+    </div>
+    <div class="fc-group">
+      <div class="fc-label-head">DISPLAY</div>
+      <div class="fc-row fc-row-slider">
+        <span class="fc-label">Size</span>
+        <input class="fc-slider" id="fc-size" type="range" min="0.25" max="2" value="1" step="0.25">
+        <span class="fc-val" id="fc-size-val">1</span>
+      </div>
+      <div class="fc-row">
+        <button class="fc-btn active" id="fc-outline">Outline</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Hover / locked tooltip ── -->
+  <div id="hover-tip">
+    <div id="hover-tip-arrow"></div>
+    <div id="hover-tip-inner">
+      <div class="ht-head">
+        <span class="ht-title"></span>
+        <a class="ht-link" href="#" target="_blank" rel="noopener noreferrer">Open paper &#8599;</a>
+      </div>
+      <div class="ht-meta">
+        <span class="ht-cluster-badge"></span>
+      </div>
+      <div class="ht-abstract-row" id="ht-abstract-toggle">Abstract &#9660;</div>
+      <div class="ht-abstract" id="ht-abstract"></div>
+    </div>
+  </div>
+
+  <!-- ── Loading progress ── -->
+  <div id="progress-wrap">
+    <div id="progress-bar"></div>
+  </div>
+  <div id="progress-label">Loading&hellip;</div>
+
+  <!-- ── Right sidebar ── -->
+  <div id="sidebar">
+    <div id="sidebar-top">
+      <div id="sidebar-search-row">
+        <input id="sidebar-search" type="text" placeholder="Search clusters&#8230;"
+               autocomplete="off" spellcheck="false">
+        <button id="sidebar-search-clear" title="Clear search">&#10005;</button>
+      </div>
+      <div id="sidebar-btns">
+        <button class="sb-btn" id="sb-show-all">Show all</button>
+        <button class="sb-btn" id="sb-isolate">Isolate</button>
+        <button class="sb-btn" id="sb-clear">Clear</button>
+      </div>
+    </div>
+    <div id="sort-row">
+      <button class="sort-btn active" id="sort-default">Default</button>
+      <button class="sort-btn" id="sort-alpha">A&#8594;Z</button>
+      <button class="sort-btn" id="sort-size">&#8595; Size</button>
+    </div>
+    <div id="sidebar-stats"></div>
+    <div id="sidebar-list"></div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
