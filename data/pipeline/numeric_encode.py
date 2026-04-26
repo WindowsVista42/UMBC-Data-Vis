@@ -64,6 +64,7 @@ def output_paths(config_file):
     return (
         os.path.join(SCRIPT_DIR, f"recipes_{base}_features.npy"),
         os.path.join(SCRIPT_DIR, f"recipes_{base}_classes.json"),
+        os.path.join(SCRIPT_DIR, f"recipes_{base}.json"),
     )
 
 
@@ -175,7 +176,7 @@ def main():
                     features[row] = 1.0 / n_cols
                     missing += 1
 
-    features_out, classes_out = output_paths(args.config)
+    features_out, classes_out, json_out = output_paths(args.config)
 
     np.save(features_out, features)
     print(f"\nSaved {features_out}  shape={features.shape}")
@@ -186,6 +187,29 @@ def main():
 
     if missing:
         print(f"  {missing:,} recipes had missing values")
+
+    if kind == "bins":
+        results = []
+        for entry in index:
+            rid    = entry["id"]
+            row    = entry["index"]
+            scores = features[row]
+            order  = np.argsort(scores)[::-1]
+            results.append({
+                "id":       rid,
+                "category": labels[order[0]],
+                "score":    round(float(scores[order[0]]), 4),
+                "runners_up": [
+                    {"category": labels[order[i]], "score": round(float(scores[order[i]]), 4)}
+                    for i in range(1, min(3, len(labels)))
+                    if scores[order[i]] > 0
+                ],
+            })
+        with open(json_out, "w", encoding="utf-8") as f:
+            json.dump(results, f, separators=(",", ":"))
+        print(f"Saved {json_out}  ({len(results):,} entries)")
+    else:
+        print(f"Skipping {json_out} (normalize type has no categorical assignment)")
 
 
 if __name__ == "__main__":

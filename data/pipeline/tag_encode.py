@@ -51,6 +51,7 @@ def output_paths(tags_file):
     return (
         os.path.join(SCRIPT_DIR, f"recipes_{base}_proba.npy"),
         os.path.join(SCRIPT_DIR, f"recipes_{base}_classes.json"),
+        os.path.join(SCRIPT_DIR, f"recipes_{base}.json"),
     )
 
 
@@ -101,7 +102,7 @@ def main():
         label = assignments.get(rid, args.other)
         proba[row, class_to_idx[label]] = 1.0
 
-    proba_out, classes_out = output_paths(args.tags_file)
+    proba_out, classes_out, json_out = output_paths(args.tags_file)
 
     np.save(proba_out, proba)
     print(f"\nSaved {proba_out}  shape={proba.shape}")
@@ -109,6 +110,26 @@ def main():
     with open(classes_out, "w", encoding="utf-8") as f:
         json.dump(classes, f)
     print(f"Saved {classes_out}")
+
+    results = []
+    for entry in index:
+        rid    = entry["id"]
+        row    = entry["index"]
+        scores = proba[row]
+        order  = np.argsort(scores)[::-1]
+        results.append({
+            "id":       rid,
+            "category": classes[order[0]],
+            "score":    round(float(scores[order[0]]), 4),
+            "runners_up": [
+                {"category": classes[order[i]], "score": round(float(scores[order[i]]), 4)}
+                for i in range(1, min(3, len(classes)))
+                if scores[order[i]] > 0
+            ],
+        })
+    with open(json_out, "w", encoding="utf-8") as f:
+        json.dump(results, f, separators=(",", ":"))
+    print(f"Saved {json_out}  ({len(results):,} entries)")
 
     dist = Counter(assignments.values())
     print(f"\nDistribution:")
