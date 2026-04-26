@@ -1,6 +1,6 @@
 # data
 
-Downloads the Food.com dataset and runs a pipeline to embed recipes and project them into 3D space for visualization.
+Downloads the Food.com dataset and runs a pipeline to embed recipes, classify them by various dimensions, and project them into 3D space for visualization.
 
 The dataset is sourced from Kaggle: [Food.com Recipes and User Interactions](https://www.kaggle.com/datasets/shuyangli94/food-com-recipes-and-user-interactions). It contains around 230k recipes and 1.1 million user interactions collected from Food.com.
 
@@ -17,14 +17,14 @@ Converted from CSV on download so that all list fields are proper JSON arrays ra
 
 **`raw/RAW_interactions.csv`** - one row per user interaction. Fields are:
 - `user_id`, `recipe_id`, `date`
-- `rating` - integer 1 to 5
+- `rating` - integer 1 to 5 (0 means no rating was given, not a zero-star rating)
 - `review` - free text
 
 ---
 
 ## Pipeline
 
-The pipeline runs in this order. Steps 3-5 can be re-run independently and in any combination once the embeddings exist.
+Run steps in order. Steps 3-7 can be re-run independently once the embeddings exist.
 
 ### 1. Download
 
@@ -40,7 +40,7 @@ Downloads all dataset files into `raw/` and produces `raw/RAW_recipes.jsonl`.
 uv run pipeline/embed.py
 ```
 
-Encodes each recipe into a 384-dim vector using `all-MiniLM-L6-v2`. The text fed to the model is controlled by `pipeline/embed_config.json`. Uses GPU automatically if available. Outputs:
+Encodes each recipe as a 384-dim vector using `all-MiniLM-L6-v2`. The text fed to the model is controlled by `pipeline/embed_config.json`. Uses GPU automatically if available. Outputs:
 
 - `pipeline/recipes_embeddings.npy` - shape `(N, 384)`, L2-normalized
 - `pipeline/recipes_index.json` - maps row index to recipe ID
@@ -48,120 +48,113 @@ Encodes each recipe into a 384-dim vector using `all-MiniLM-L6-v2`. The text fed
 ### 3. Assign categories
 
 ```
+uv run pipeline/derive_taxonomy.py pipeline/cuisines.txt
 uv run pipeline/assign.py pipeline/cuisines.txt
+
+uv run pipeline/derive_taxonomy.py pipeline/meal_types.txt
 uv run pipeline/assign.py pipeline/meal_types.txt
 ```
 
-Uses k-nearest-neighbor classification (k=100, distance-weighted) to assign each recipe to a category. Training data is recipes that are already tagged with one of the categories in the `.txt` file. The taxonomy file (derived in step 3a) ensures that when a recipe has multiple matching tags, the most specific one is used.
+Uses k-NN classification (k=100, distance-weighted, cosine) seeded by Food.com's own tags to classify all recipes. `derive_taxonomy.py` derives parent-child tag relationships from co-occurrence data so the most specific label is used for training. Prior correction removes class imbalance bias from the k-NN posterior.
 
-Applies prior correction to remove class imbalance bias from the KNN posterior. Tagged recipes get leave-one-out probabilities so their own label does not dominate their neighborhood.
+Each run outputs `pipeline/recipes_{name}.json` (per-recipe assignment), `pipeline/recipes_{name}_proba.npy` (full probability matrix for UMAP), and `pipeline/recipes_{name}_classes.json`.
 
-Each run outputs:
-- `pipeline/recipes_{name}.json` - per-recipe assignment with score and two runners-up
-- `pipeline/recipes_{name}_proba.npy` - full `(N, n_classes)` probability matrix used by project.py
-- `pipeline/recipes_{name}_classes.json` - ordered class list matching proba columns
-
-#### 3a. Derive taxonomy (run once per category file)
-
-```
-uv run pipeline/derive_taxonomy.py pipeline/cuisines.txt
-uv run pipeline/derive_taxonomy.py pipeline/meal_types.txt
-```
-
-Scans the JSONL to find parent-child relationships between tags (e.g. `cajun` is always a subset of `southern-united-states`). Outputs `pipeline/{name}_taxonomy.json` which assign.py reads automatically. Also outputs a human-readable `pipeline/{name}_taxonomy.txt` to cross-reference.
-
-#### 3b. List available tags (optional helper)
-
+To find what tags are available for a given parent:
 ```
 uv run pipeline/cuisine_tags.py                    # cuisine tags
 uv run pipeline/cuisine_tags.py --parent course    # meal/course tags
-uv run pipeline/cuisine_tags.py --parent main-ingredient
 ```
 
-Lists all tags that exclusively appear under a given parent tag, with recipe counts. Use this to decide what goes in a `.txt` category file.
+### 4. Process ratings
 
-### 4. Encode additional features
+```
+uv run pipeline/process_ratings.py
+```
 
-These produce feature vectors that project.py picks up automatically.
+Computes per-recipe `avg_rating` and `n_ratings` from `raw/RAW_interactions.csv`, excluding zero ratings. Writes `pipeline/recipe_contrib_ratings.json.gz` which `export.py` picks up automatically.
 
-#### Tag-based (hard one-hot)
+### 5. Encode additional features
 
+Each script produces a `*_features.npy` file that `project.py` picks up automatically.
+
+**Tag-based:**
 ```
 uv run pipeline/tag_encode.py pipeline/cook_time.txt --other longer
 ```
 
-Assigns each recipe to the first matching tag in the list (most specific first). Recipes with no match get the `--other` label. Outputs `pipeline/recipes_{name}_proba.npy`.
-
-#### Numeric (soft-binned or normalized)
-
+**Numeric (soft bins or normalized):**
 ```
 uv run pipeline/numeric_encode.py pipeline/minutes.json
 uv run pipeline/numeric_encode.py pipeline/n_steps.json
+uv run pipeline/numeric_encode.py pipeline/n_ingredients.json
 uv run pipeline/numeric_encode.py pipeline/submitted.json
 ```
 
-Encodes a single numeric field per config file. Two types:
+**From a contrib file (e.g. ratings not in the JSONL):**
+```
+uv run pipeline/numeric_encode.py pipeline/avg_rating.json --contrib pipeline/recipe_contrib_ratings.json.gz
+uv run pipeline/numeric_encode.py pipeline/n_ratings.json  --contrib pipeline/recipe_contrib_ratings.json.gz
+```
 
-- `bins` - soft binning with linear interpolation between bin centers. A recipe halfway between two centers gets split weight. Good for step counts, cook time.
-- `normalize` - min-max normalization to [0, 1] as a single column. Good for dates and other continuous values where bin placement would be arbitrary.
+See `pipeline/PLAN.md` for the encoding types (`bins` vs `normalize`) and how to write new config files.
 
-Outputs `pipeline/recipes_{name}_features.npy`.
-
-### 5. Project
+### 6. Project
 
 ```
 uv run pipeline/project.py
 ```
 
-Runs UMAP on the embeddings to produce 3D coordinates for visualization. Auto-detects all `*_proba.npy` and `*_features.npy` files in the pipeline directory and concatenates them to the embeddings before projection. This pulls recipes with similar category assignments together in the 3D space.
+Runs UMAP on the embeddings augmented with all category and feature vectors. Weights for each input are tunable in `pipeline/projection_weights.json`. Outputs `pipeline/recipes_umap3d.npy` and `pipeline/recipes_umap3d_index.json`. Pass `--dims 2` for a 2D projection.
 
-Key flags:
-- `--dims 2` - produce a 2D projection instead
-- `--category-weight 0.5` - how strongly category features influence the projection (default: 0.5, set to 0 to disable)
-- `--neighbors 15` - UMAP n_neighbors
-- `--min-dist 0.1` - UMAP min_dist
-- `--random-state 42` - fix seed for reproducibility
-
-Outputs:
-- `pipeline/recipes_umap3d.npy` - shape `(N, 3)`
-- `pipeline/recipes_umap3d_index.json`
-
-### 6. Preview
+### 7. Export
 
 ```
-uv run preview.py
+uv run pipeline/export.py
 ```
 
-Generates `preview.html`, a standalone interactive plotly point cloud. Open it in any browser. Colors by cuisine if assign.py has been run, otherwise uniform. Hover over a point to see recipe name, cuisine, cook time, ingredients, and description.
+Packages everything into the format the web app expects. Outputs to `export/`:
+- `geometry.drc` - Draco-compressed 3D positions (0.88 MB)
+- `attributes.bin.gz` - per-point attributes: recipe ID, chunk ID, category IDs, scalar features (1.05 MB)
+- `meta.json` - manifest: totals, category families with labels, attribute layout
+- `chunks/chunk_XXXXXX.json.gz` - recipe metadata, spatially organized by Z-order curve for good hover cache locality (~32 MB total)
 
-Key flags:
-- `--max-rows 10000` - sample a subset for faster rendering
-- `--dims 2` - force 2D (auto-detects 3D by default)
-- `--assignment pipeline/recipes_cuisines.json` - which assignment file to use for coloring
-- `--seed 42` - reproducible point sampling
+Points are sorted by Z-order (Morton code) so nearby points in 3D space land in the same metadata chunk.
+
+To add extra metadata fields: write a `pipeline/recipe_contrib_*.json.gz` (keyed by recipe ID string) and re-run `export.py`. No other changes needed.
+
+### 8. Copy to site
+
+```
+cp -r export/* ../site/data/
+```
 
 ---
 
 ## Config files
 
-**`pipeline/embed_config.json`** - template for the text passed to the embedding model. Uses `{field}` placeholders. List fields like `ingredients` are joined with `, `. Edit to include or exclude recipe fields.
+**`pipeline/embed_config.json`** - template for recipe text passed to the embedding model. Uses `{field}` placeholders; list fields are joined with `, `.
 
-**`pipeline/cuisines.txt`** - cuisine categories for assign.py. One tag name per line, must match Food.com tag names exactly (lowercase, hyphenated). Run `cuisine_tags.py` to find valid names.
+**`pipeline/cuisines.txt`** - cuisine tag names for `assign.py`, one per line. Must match Food.com tag names exactly (lowercase, hyphenated).
 
-**`pipeline/meal_types.txt`** - meal type categories for assign.py. Same format.
+**`pipeline/meal_types.txt`** - meal type tag names for `assign.py`.
 
-**`pipeline/minutes.json`** - soft bin config for cook time in minutes.
+**`pipeline/projection_weights.json`** - multiplicative weights for each input to the UMAP projection. Keys are file stems (e.g. `"cuisines_proba"`, `"n_steps_features"`). Use `"embeddings"` to scale the base embedding vectors. Use `"default"` as a fallback for any file not explicitly listed.
 
-**`pipeline/n_steps.json`** - soft bin config for number of steps.
-
-**`pipeline/submitted.json`** - normalize config for submission date.
+**`pipeline/minutes.json`, `pipeline/n_steps.json`, `pipeline/n_ingredients.json`, `pipeline/submitted.json`, `pipeline/avg_rating.json`, `pipeline/n_ratings.json`** - numeric encoding configs. Each specifies a field, encoding type (`bins` or `normalize`), and bin centers or label.
 
 ---
 
 ## Adding a new category
 
-1. Run `cuisine_tags.py --parent <parent-tag>` to find valid tag names under that parent
+1. Run `cuisine_tags.py --parent <parent-tag>` to find valid tag names
 2. Create a new `.txt` file with the tags you want
 3. Run `derive_taxonomy.py` on it
 4. Run `assign.py` on it
-5. Rerun `project.py` to incorporate the new proba file
+5. Rerun `project.py` and `export.py`
+
+## Adding a new numeric feature
+
+1. Create a JSON config in `pipeline/` with the field name and bin centers
+2. Run `numeric_encode.py` on it (add `--contrib` if the field comes from a contrib file)
+3. Add a weight for it in `projection_weights.json`
+4. Rerun `project.py` and `export.py`

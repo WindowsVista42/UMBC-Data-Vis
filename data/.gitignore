@@ -7,3 +7,5 @@
 __pycache__
 *.html
 *.txt
+export/
+pipeline/recipe_contrib_*.json.gz

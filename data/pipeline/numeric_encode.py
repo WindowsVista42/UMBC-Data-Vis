@@ -15,32 +15,16 @@ Output filename is derived from the config filename:
   n_steps.json   -> recipes_n_steps_features.npy
   submitted.json -> recipes_submitted_features.npy
 
-Date fields (strings containing "-") are automatically converted to year.
-Missing values get a uniform/midpoint assignment.
-
-Config format:
-
-  Bins:
-    {
-      "field": "n_steps",
-      "type": "bins",
-      "centers": [3, 8, 15, 25],
-      "labels": ["1-5 steps", "6-10 steps", "11-20 steps", "21+ steps"]
-    }
-
-  Normalize:
-    {
-      "field": "submitted",
-      "type": "normalize",
-      "label": "date"
-    }
+By default reads field values from RAW_recipes.jsonl. Use --contrib to read
+from a recipe_contrib_*.json.gz file instead (e.g. for avg_rating, n_ratings).
 
 Usage:
     uv run pipeline/numeric_encode.py pipeline/n_steps.json
-    uv run pipeline/numeric_encode.py pipeline/submitted.json
+    uv run pipeline/numeric_encode.py pipeline/avg_rating.json --contrib pipeline/recipe_contrib_ratings.json.gz
 """
 
 import argparse
+import gzip
 import json
 import os
 import sys
@@ -55,7 +39,10 @@ JSONL_PATH    = os.path.join(SCRIPT_DIR, "..", "raw", "RAW_recipes.jsonl")
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("config", help="Path to JSON config file")
-    parser.add_argument("--index", default=DEFAULT_INDEX, help="Path to recipes_index.json")
+    parser.add_argument("--index",  default=DEFAULT_INDEX, help="Path to recipes_index.json")
+    parser.add_argument("--contrib", default=None,
+                        help="Path to a recipe_contrib_*.json.gz to read field values from "
+                             "instead of RAW_recipes.jsonl (e.g. pipeline/recipe_contrib_ratings.json.gz)")
     return parser.parse_args()
 
 
@@ -134,47 +121,74 @@ def main():
 
     features = np.zeros((len(index), n_cols), dtype=np.float32)
 
-    # For normalize: compute min/max from a first pass
+    # Load contrib data if provided
+    contrib_data = None
+    if args.contrib:
+        print(f"Reading from contrib file: {args.contrib}")
+        with gzip.open(args.contrib, "rt", encoding="utf-8") as f:
+            contrib_data = json.load(f)  # {recipe_id_str: {field: value, ...}}
+
+    def get_record_value(rid):
+        if contrib_data is not None:
+            rec = contrib_data.get(str(rid))
+            return extract_value(rec, field) if rec else None
+        return None  # caller handles JSONL path
+
+    # For normalize: compute min/max
     if kind == "normalize":
         vals = []
-        with open(JSONL_PATH, encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                val = extract_value(json.loads(line), field)
+        if contrib_data is not None:
+            for rec in contrib_data.values():
+                val = extract_value(rec, field)
                 if val is not None:
                     vals.append(val)
+        else:
+            with open(JSONL_PATH, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    val = extract_value(json.loads(line), field)
+                    if val is not None:
+                        vals.append(val)
         vmin, vmax = min(vals), max(vals)
         print(f"  Range: {vmin} - {vmax}")
 
     # Encode
     missing = 0
-    with open(JSONL_PATH, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            r   = json.loads(line)
-            rid = r.get("id")
-            if rid not in id_to_idx:
-                continue
-            row = id_to_idx[rid]
-            val = extract_value(r, field)
 
-            if kind == "normalize":
-                if val is not None and vmax > vmin:
-                    features[row, 0] = (val - vmin) / (vmax - vmin)
-                else:
-                    features[row, 0] = 0.5
-                    if val is None:
-                        missing += 1
+    def encode_row(row, val):
+        nonlocal missing
+        if kind == "normalize":
+            if val is not None and vmax > vmin:
+                features[row, 0] = (val - vmin) / (vmax - vmin)
             else:
-                if val is not None:
-                    features[row] = soft_encode(val, centers)
-                else:
-                    features[row] = 1.0 / n_cols
+                features[row, 0] = 0.5
+                if val is None:
                     missing += 1
+        else:
+            if val is not None:
+                features[row] = soft_encode(val, centers)
+            else:
+                features[row] = 1.0 / n_cols
+                missing += 1
+
+    if contrib_data is not None:
+        for entry in index:
+            rid = entry["id"]
+            row = entry["index"]
+            encode_row(row, get_record_value(rid))
+    else:
+        with open(JSONL_PATH, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                r   = json.loads(line)
+                rid = r.get("id")
+                if rid not in id_to_idx:
+                    continue
+                encode_row(id_to_idx[rid], extract_value(r, field))
 
     features_out, classes_out, json_out = output_paths(args.config)
 

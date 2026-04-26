@@ -112,7 +112,10 @@ def main():
         proba_paths = [p for p in proba_paths if os.path.exists(p)]
 
         if proba_paths:
-            parts = [embeddings]
+            emb_weight = float(weight_config.get("embeddings", 1.0))
+            if emb_weight != 1.0:
+                print(f"  embeddings weight={emb_weight}")
+            parts = [emb_weight * embeddings]
             for path in proba_paths:
                 proba  = np.load(path)
                 if args.max_rows:
