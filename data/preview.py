@@ -8,7 +8,7 @@ Hover shows recipe name, cuisine, time, ingredients, and description.
 
 Usage:
     uv run preview.py
-    uv run preview.py --sample 10000
+    uv run preview.py --max-rows 10000
     uv run preview.py --dims 2
     uv run preview.py --output my_preview.html
 """
@@ -29,10 +29,12 @@ JSONL_PATH = os.path.join(SCRIPT_DIR, "raw", "RAW_recipes.jsonl")
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--sample", type=int, default=20_000, help="Points to sample (default: 20000)")
+    parser.add_argument("--max-rows", type=int, default=None, help="Max points to display (default: all)")
     parser.add_argument("--dims", type=int, choices=[2, 3], default=None, help="Force 2D or 3D (default: auto-detect)")
     parser.add_argument("--output", default=os.path.join(SCRIPT_DIR, "preview.html"), help="Output HTML path")
     parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducible sampling")
+    parser.add_argument("--assignment", default=os.path.join(PIPELINE_DIR, "recipes_cuisines.json"),
+                        help="Path to assignment JSON from assign.py (default: pipeline/recipes_cuisines.json)")
     return parser.parse_args()
 
 
@@ -68,7 +70,7 @@ def make_hover(recipe, cuisine_entry):
     lines = [f"<b>{name}</b>"]
     if cuisine_entry:
         score = cuisine_entry.get("score", 0)
-        lines.append(f"Cuisine: {cuisine_entry['cuisine']} ({score:.2f})")
+        lines.append(f"Cuisine: {cuisine_entry['category']} ({score:.2f})")
     if minutes:
         lines.append(f"Time: {minutes} min")
     if ingredients:
@@ -84,7 +86,7 @@ def make_hover(recipe, cuisine_entry):
 def build_traces(coords_s, ids_s, hover, cuisine_map, dims):
     groups = defaultdict(lambda: defaultdict(list))
     for i, rid in enumerate(ids_s):
-        label = cuisine_map[rid]["cuisine"] if rid in cuisine_map else "Recipes"
+        label = (cuisine_map[rid]["category"] if rid in cuisine_map else None) or "Unassigned"
         groups[label]["x"].append(float(coords_s[i, 0]))
         groups[label]["y"].append(float(coords_s[i, 1]))
         if dims == 3:
@@ -129,21 +131,20 @@ def main():
     with open(index_path, encoding="utf-8") as f:
         index = json.load(f)
 
-    n = min(args.sample, len(index))
+    n = min(args.max_rows, len(index)) if args.max_rows else len(index)
     sample_pos = rng.choice(len(index), n, replace=False)
     coords_s = coords[sample_pos]
     ids_s = [index[i]["id"] for i in sample_pos]
     print(f"Sampled {n:,} of {len(index):,} points")
 
-    cuisine_path = os.path.join(PIPELINE_DIR, "recipes_cuisine.json")
     cuisine_map = {}
-    if os.path.exists(cuisine_path):
-        with open(cuisine_path, encoding="utf-8") as f:
+    if os.path.exists(args.assignment):
+        with open(args.assignment, encoding="utf-8") as f:
             for entry in json.load(f):
                 cuisine_map[entry["id"]] = entry
-        print(f"Cuisine assignment loaded ({len(cuisine_map):,} entries)")
+        print(f"Assignment loaded from {args.assignment} ({len(cuisine_map):,} entries)")
     else:
-        print("No cuisine assignment found — using uniform color")
+        print(f"No assignment file found at {args.assignment} - using uniform color")
 
     print("Loading recipe metadata...")
     recipes = load_recipes(ids_s)
@@ -152,7 +153,7 @@ def main():
 
     traces = build_traces(coords_s, ids_s, hover, cuisine_map, dims)
 
-    title = f"Recipe UMAP ({dims}D) — {n:,} of {len(index):,} points"
+    title = f"Recipe UMAP ({dims}D) - {n:,} of {len(index):,} points"
     if dims == 3:
         layout = go.Layout(title=title, scene=dict(aspectmode="cube"))
     else:
