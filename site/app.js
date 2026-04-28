@@ -4,8 +4,8 @@ import { DRACOLoader }   from 'three/addons/loaders/DRACOLoader.js';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const DATA       = 'data/';
-const LEFT_W     = 280;
-const RIGHT_W    = 270;
+const LEFT_W     = 0;
+const RIGHT_W    = 0;
 const TOPBAR_H   = 44;
 const CAT_TEX_W  = 4096;   // texture width for category data buffer
 const MAX_LABELS = 64;     // max labels per category family for uniform arrays
@@ -283,20 +283,20 @@ function initScene(palette) {
   // Initial alpha cache (all visible)
   alphaCache = new Float32Array(N).fill(1.0);
 
-  // UI wiring
-  document.getElementById('fc-reset').addEventListener('click', () => setCameraPreset('reset'));
-  document.getElementById('fc-top').addEventListener('click',   () => setCameraPreset('top'));
-  document.getElementById('fc-front').addEventListener('click', () => setCameraPreset('front'));
-  document.getElementById('fc-side').addEventListener('click',  () => setCameraPreset('side'));
+  // UI wiring — elements may be absent if their panel is commented out in HTML
+  document.getElementById('fc-reset')?.addEventListener('click', () => setCameraPreset('reset'));
+  document.getElementById('fc-top')?.addEventListener('click',   () => setCameraPreset('top'));
+  document.getElementById('fc-front')?.addEventListener('click', () => setCameraPreset('front'));
+  document.getElementById('fc-side')?.addEventListener('click',  () => setCameraPreset('side'));
 
   const sizeSlider = document.getElementById('fc-size');
-  sizeSlider.addEventListener('input', () => {
+  sizeSlider?.addEventListener('input', () => {
     uniforms.uPointSize.value = parseFloat(sizeSlider.value);
     document.getElementById('fc-size-val').textContent = sizeSlider.value + '×';
   });
 
   const outlineBtn = document.getElementById('fc-outline');
-  outlineBtn.addEventListener('click', () => {
+  outlineBtn?.addEventListener('click', () => {
     uniforms.uOutline.value = outlineBtn.classList.toggle('active') ? 1.0 : 0.0;
   });
 
@@ -321,7 +321,14 @@ function setHighlightLabel(labelIdx) {
     categoryModes[i] = (labelIdx < 0 || i === labelIdx) ? 0 : 2;
   }
   uniforms.uCategoryModes.value = Array.from(categoryModes);
-  alphaCache.fill(1.0); // all points always raycasted
+  if (labelIdx < 0) {
+    alphaCache.fill(1.0);
+  } else {
+    const famData = getCategoryFamilyData(activeFamilyIdx);
+    for (let i = 0; i < N; i++) {
+      alphaCache[i] = famData[i] === labelIdx ? 1.0 : 0.0;
+    }
+  }
   renderCategoryList();
 }
 
@@ -500,11 +507,12 @@ function onPointerMove(e) {
     const d = Math.hypot(e.clientX - mouseDownX, e.clientY - mouseDownY);
     if (d > DRAG_THRESH) { hideHoverTip(); return; }
   }
+  if (lockedIdx >= 0) return;
   const idx = raycastBest(e);
   if (idx >= 0) {
     showHoverTip(idx);
   } else {
-    if (lockedIdx < 0) hideHoverTip();
+    hideHoverTip();
   }
 }
 
