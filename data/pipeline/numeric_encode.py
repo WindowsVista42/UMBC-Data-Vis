@@ -32,7 +32,8 @@ import sys
 import numpy as np
 
 SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_INDEX = os.path.join(SCRIPT_DIR, "recipes_index.json")
+ARTIFACTS_DIR = os.path.join(SCRIPT_DIR, "..", "artifacts")
+DEFAULT_INDEX = os.path.join(ARTIFACTS_DIR, "recipes_index.json")
 JSONL_PATH    = os.path.join(SCRIPT_DIR, "..", "raw", "RAW_recipes.jsonl")
 
 
@@ -49,9 +50,9 @@ def parse_args():
 def output_paths(config_file):
     base = os.path.splitext(os.path.basename(config_file))[0]
     return (
-        os.path.join(SCRIPT_DIR, f"recipes_{base}_features.npy"),
-        os.path.join(SCRIPT_DIR, f"recipes_{base}_classes.json"),
-        os.path.join(SCRIPT_DIR, f"recipes_{base}.json"),
+        os.path.join(ARTIFACTS_DIR, f"recipes_{base}_features.npy"),
+        os.path.join(ARTIFACTS_DIR, f"recipes_{base}_classes.json"),
+        os.path.join(ARTIFACTS_DIR, f"recipes_{base}.json"),
     )
 
 
@@ -190,6 +191,7 @@ def main():
                     continue
                 encode_row(id_to_idx[rid], extract_value(r, field))
 
+    os.makedirs(ARTIFACTS_DIR, exist_ok=True)
     features_out, classes_out, json_out = output_paths(args.config)
 
     np.save(features_out, features)

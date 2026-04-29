@@ -18,11 +18,13 @@ import os
 from collections import defaultdict
 
 SCRIPT_DIR        = os.path.dirname(os.path.abspath(__file__))
+ARTIFACTS_DIR     = os.path.join(SCRIPT_DIR, "..", "artifacts")
 INTERACTIONS_PATH = os.path.join(SCRIPT_DIR, "..", "raw", "RAW_interactions.csv")
-OUTPUT_PATH       = os.path.join(SCRIPT_DIR, "recipe_contrib_ratings.json.gz")
+OUTPUT_PATH       = os.path.join(ARTIFACTS_DIR, "recipe_contrib_ratings.json.gz")
 
 
 def main():
+    os.makedirs(ARTIFACTS_DIR, exist_ok=True)
     ratings = defaultdict(list)
 
     print(f"Reading {INTERACTIONS_PATH}...")

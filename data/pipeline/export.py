@@ -31,9 +31,10 @@ import sys
 import DracoPy
 import numpy as np
 
-SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_OUT  = os.path.join(SCRIPT_DIR, "..", "export")
-JSONL_PATH   = os.path.join(SCRIPT_DIR, "..", "raw", "RAW_recipes.jsonl")
+SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
+ARTIFACTS_DIR = os.path.join(SCRIPT_DIR, "..", "artifacts")
+DEFAULT_OUT   = os.path.join(SCRIPT_DIR, "..", "export")
+JSONL_PATH    = os.path.join(SCRIPT_DIR, "..", "raw", "RAW_recipes.jsonl")
 
 
 DEFAULT_SITE = os.path.join(SCRIPT_DIR, "..", "..", "site", "data")
@@ -70,8 +71,8 @@ def find_feature_files():
     """
     results = []
     for npy_path in sorted(
-        glob.glob(os.path.join(SCRIPT_DIR, "*_proba.npy")) +
-        glob.glob(os.path.join(SCRIPT_DIR, "*_features.npy"))
+        glob.glob(os.path.join(ARTIFACTS_DIR, "*_proba.npy")) +
+        glob.glob(os.path.join(ARTIFACTS_DIR, "*_features.npy"))
     ):
         classes_path = (npy_path
                         .replace("_proba.npy",    "_classes.json")
@@ -89,8 +90,8 @@ def find_feature_files():
 
 
 def find_contrib_files():
-    """Return all pipeline/recipe_contrib_*.json.gz paths."""
-    return sorted(glob.glob(os.path.join(SCRIPT_DIR, "recipe_contrib_*.json.gz")))
+    """Return all artifacts/recipe_contrib_*.json.gz paths."""
+    return sorted(glob.glob(os.path.join(ARTIFACTS_DIR, "recipe_contrib_*.json.gz")))
 
 
 # --- Main ---
@@ -102,8 +103,8 @@ def main():
     os.makedirs(chunks_dir, exist_ok=True)
 
     # Load coordinates and index
-    coords_path = os.path.join(SCRIPT_DIR, "recipes_umap3d.npy")
-    index_path  = os.path.join(SCRIPT_DIR, "recipes_umap3d_index.json")
+    coords_path = os.path.join(ARTIFACTS_DIR, "recipes_umap3d.npy")
+    index_path  = os.path.join(ARTIFACTS_DIR, "recipes_umap3d_index.json")
     for p in [coords_path, index_path, JSONL_PATH]:
         if not os.path.exists(p):
             print(f"ERROR: File not found: {p}")

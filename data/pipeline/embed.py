@@ -25,10 +25,11 @@ import numpy as np
 import torch
 from sentence_transformers import SentenceTransformer
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_INPUT = os.path.join(SCRIPT_DIR, "..", "raw", "RAW_recipes.jsonl")
-DEFAULT_CONFIG = os.path.join(SCRIPT_DIR, "embed_config.json")
-DEFAULT_OUTPUT_PREFIX = os.path.join(SCRIPT_DIR, "recipes")
+SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
+ARTIFACTS_DIR = os.path.join(SCRIPT_DIR, "..", "artifacts")
+DEFAULT_INPUT         = os.path.join(SCRIPT_DIR, "..", "raw", "RAW_recipes.jsonl")
+DEFAULT_CONFIG        = os.path.join(SCRIPT_DIR, "configs", "embed_config.json")
+DEFAULT_OUTPUT_PREFIX = os.path.join(ARTIFACTS_DIR, "recipes")
 MODEL_NAME = "all-MiniLM-L6-v2"
 
 
@@ -122,7 +123,7 @@ def main():
         normalize_embeddings=True,
     ).astype(np.float32)
 
-    os.makedirs(os.path.dirname(os.path.abspath(args.output_prefix)), exist_ok=True)
+    os.makedirs(ARTIFACTS_DIR, exist_ok=True)
     embeddings_path = args.output_prefix + "_embeddings.npy"
     index_path = args.output_prefix + "_index.json"
 

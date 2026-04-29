@@ -39,9 +39,10 @@ import numpy as np
 import umap
 
 SCRIPT_DIR            = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_EMBEDDINGS    = os.path.join(SCRIPT_DIR, "recipes_embeddings.npy")
-DEFAULT_INDEX         = os.path.join(SCRIPT_DIR, "recipes_index.json")
-DEFAULT_OUTPUT_PREFIX = os.path.join(SCRIPT_DIR, "recipes")
+ARTIFACTS_DIR         = os.path.join(SCRIPT_DIR, "..", "artifacts")
+DEFAULT_EMBEDDINGS    = os.path.join(ARTIFACTS_DIR, "recipes_embeddings.npy")
+DEFAULT_INDEX         = os.path.join(ARTIFACTS_DIR, "recipes_index.json")
+DEFAULT_OUTPUT_PREFIX = os.path.join(ARTIFACTS_DIR, "recipes")
 
 
 def parse_args():
@@ -62,16 +63,16 @@ def parse_args():
     parser.add_argument("--category-weight",  type=float, default=0.5,
                         help="Default weight for all category vectors. Overridden per-file "
                              "by --weights config. 0 disables augmentation. (default: 0.5)")
-    parser.add_argument("--weights", default=os.path.join(SCRIPT_DIR, "projection_weights.json"),
-                        help="Path to per-file weight config JSON (default: pipeline/projection_weights.json)")
+    parser.add_argument("--weights", default=os.path.join(SCRIPT_DIR, "configs", "projection_weights.json"),
+                        help="Path to per-file weight config JSON (default: pipeline/configs/projection_weights.json)")
     return parser.parse_args()
 
 
 def find_proba_files():
-    """Auto-detect all *_proba.npy and *_features.npy files in the pipeline directory."""
+    """Auto-detect all *_proba.npy and *_features.npy files in the artifacts directory."""
     return sorted(
-        glob.glob(os.path.join(SCRIPT_DIR, "*_proba.npy")) +
-        glob.glob(os.path.join(SCRIPT_DIR, "*_features.npy"))
+        glob.glob(os.path.join(ARTIFACTS_DIR, "*_proba.npy")) +
+        glob.glob(os.path.join(ARTIFACTS_DIR, "*_features.npy"))
     )
 
 
