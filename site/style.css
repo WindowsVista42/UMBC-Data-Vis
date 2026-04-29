@@ -73,7 +73,7 @@ html, body {
 #left-panel {
   position: fixed;
   top: 56px; left: 12px; bottom: 12px;
-  width: 280px;
+  width: 290px;
   height: 400px;
   background: rgba(15, 15, 28, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.10);
@@ -320,7 +320,7 @@ html, body {
 #right-column {
   position: fixed;
   top: 56px; right: 12px; bottom: 12px;
-  width: 280px;
+  width: 290px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -328,53 +328,42 @@ html, body {
   user-select: none;
 }
 
-.fc-group {
-  background: rgba(15, 15, 28, 0.88);
-  border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 8px;
-  padding: 8px 10px;
+/* ── Display widget ────────────────────────────────────────────────────── */
+#display-widget {
+  position: fixed;
+  bottom: 20px;
+  right: 40px;
+  width: 230px;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  backdrop-filter: blur(8px);
+  align-items: center;
+  gap: 8px;
+  background: rgba(15, 15, 28, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 5px 12px 5px 10px;
+  backdrop-filter: blur(6px);
+  z-index: 1000;
+  user-select: none;
 }
 
-.fc-label-head { font-size: 9px; letter-spacing: 0.08em; color: rgba(255,255,255,0.35); font-weight: 600; }
-.fc-hint       { font-size: 9px; color: rgba(255,255,255,0.22); }
+.sw-label { font-size: 10px; color: rgba(255,255,255,0.35); white-space: nowrap; }
+.sw-val   { font-size: 10px; color: rgba(255,255,255,0.40); min-width: 22px; text-align: right; }
 
-.fc-row { display: flex; gap: 4px; align-items: center; }
-.fc-row-slider { gap: 6px; }
-.fc-label { font-size: 10px; color: rgba(255,255,255,0.38); min-width: 28px; }
-.fc-val   { font-size: 10px; color: rgba(255,255,255,0.45); min-width: 24px; text-align: right; }
-
-.fc-slider {
+.sw-slider {
   -webkit-appearance: none; appearance: none;
   flex: 1; height: 3px;
   background: rgba(255,255,255,0.16); border-radius: 2px;
   outline: none; cursor: pointer;
 }
-.fc-slider::-webkit-slider-thumb {
+.sw-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 12px; height: 12px; border-radius: 50%;
   background: rgba(255,255,255,0.68); cursor: pointer;
 }
-.fc-slider::-moz-range-thumb {
+.sw-slider::-moz-range-thumb {
   width: 12px; height: 12px; border-radius: 50%;
   background: rgba(255,255,255,0.68); cursor: pointer; border: none;
 }
-
-.fc-btn {
-  font-size: 11px; padding: 3px 8px;
-  background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 4px;
-  color: rgba(255,255,255,0.62);
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s;
-  white-space: nowrap;
-}
-.fc-btn:hover  { background: rgba(255,255,255,0.13); color: rgba(255,255,255,0.90); }
-.fc-btn.active { background: rgba(78,121,167,0.35); border-color: rgba(78,121,167,0.60); color: rgba(255,255,255,0.90); }
 
 /* ── Hover tooltip ─────────────────────────────────────────────────────── */
 #hover-tip {

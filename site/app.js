@@ -289,15 +289,12 @@ function initScene(palette) {
   document.getElementById('fc-front')?.addEventListener('click', () => setCameraPreset('front'));
   document.getElementById('fc-side')?.addEventListener('click',  () => setCameraPreset('side'));
 
+  const SIZE_MULTIPLIERS = [0.25, 0.5, 1.0, 2.0];
   const sizeSlider = document.getElementById('fc-size');
   sizeSlider?.addEventListener('input', () => {
-    uniforms.uPointSize.value = parseFloat(sizeSlider.value);
-    document.getElementById('fc-size-val').textContent = sizeSlider.value + '×';
-  });
-
-  const outlineBtn = document.getElementById('fc-outline');
-  outlineBtn?.addEventListener('click', () => {
-    uniforms.uOutline.value = outlineBtn.classList.toggle('active') ? 1.0 : 0.0;
+    const mul = SIZE_MULTIPLIERS[parseInt(sizeSlider.value)];
+    uniforms.uPointSize.value = 4.0 * mul;
+    document.getElementById('fc-size-val').textContent = mul + '×';
   });
 
   window.addEventListener('resize', onResize);
@@ -788,15 +785,21 @@ function showRecipeInfo(idx) {
     const tagsEl = document.getElementById('recipe-tags');
     tagsEl.innerHTML = '';
     meta.categories.forEach((cat, fi) => {
-      const famData = getCategoryFamilyData(fi);
-      const catId   = famData[idx];
-      const label   = cat.labels[catId] ?? '';
-      if (label) {
-        const tag = document.createElement('span');
-        tag.className   = 'recipe-tag';
-        tag.textContent = label;
-        tagsEl.appendChild(tag);
-      }
+      const famData  = getCategoryFamilyData(fi);
+      const labelIdx = famData[idx];
+      const label    = cat.labels[labelIdx] ?? '';
+      if (!label) return;
+      const [r, g, b] = getPaletteRgb(labelIdx);
+      const tr = Math.round(r * 0.45 + 255 * 0.55);
+      const tg = Math.round(g * 0.45 + 255 * 0.55);
+      const tb = Math.round(b * 0.45 + 255 * 0.55);
+      const tag = document.createElement('span');
+      tag.className        = 'recipe-tag';
+      tag.textContent      = label;
+      tag.style.background  = `rgba(${r},${g},${b},0.35)`;
+      tag.style.borderColor = `rgba(${r},${g},${b},0.80)`;
+      tag.style.color       = `rgb(${tr},${tg},${tb})`;
+      tagsEl.appendChild(tag);
     });
 
     const stats = [];

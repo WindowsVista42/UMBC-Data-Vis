@@ -75,31 +75,8 @@
   <!-- ── Right column ── -->
   <div id="right-column">
 
-    <!--<div class="fc-group">
-      <div class="fc-label-head">CAMERA</div>
-      <div class="fc-row">
-        <button class="fc-btn" id="fc-reset">&#8635; Reset</button>
-        <button class="fc-btn" id="fc-top">Top</button>
-        <button class="fc-btn" id="fc-front">Front</button>
-        <button class="fc-btn" id="fc-side">Side</button>
-      </div>
-      <div class="fc-hint">Drag · Scroll zoom · Shift+drag pan</div>
-    </div>-->
-
-    <!--<div class="fc-group">
-      <div class="fc-label-head">DISPLAY</div>
-      <div class="fc-row fc-row-slider">
-        <span class="fc-label">Size</span>
-        <input class="fc-slider" id="fc-size" type="range" min="0.5" max="8" value="4" step="0.5">
-        <span class="fc-val" id="fc-size-val">4×</span>
-      </div>
-      <div class="fc-row">
-        <button class="fc-btn active" id="fc-outline">Outline</button>
-      </div>
-    </div>-->
-
     <div id="right-panel">
-      <div class="fc-label-head" style="padding:8px 10px 6px;">CATEGORIES</div>
+      <div style="font-size:9px;letter-spacing:0.08em;color:rgba(255,255,255,0.35);font-weight:600;padding:8px 10px 6px;">CATEGORIES</div>
       <div id="category-tabs"></div>
       <div id="category-list"></div>
     </div>
@@ -129,6 +106,13 @@
       <p>Dataset: <a href="https://www.kaggle.com/datasets/shuyangli94/food-com-recipes-and-user-interactions" target="_blank">Food.com Recipes and User Interactions</a></p>
       <button id="about-close">Close</button>
     </div>
+  </div>
+
+  <!-- ── Display widget ── -->
+  <div id="display-widget">
+    <span class="sw-label">Point Size</span>
+    <input class="sw-slider" id="fc-size" type="range" min="0" max="3" value="2" step="1">
+    <span class="sw-val" id="fc-size-val">1×</span>
   </div>
 
   <script type="module" src="app.js"></script>
