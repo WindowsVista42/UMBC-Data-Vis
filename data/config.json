@@ -1,0 +1,16 @@
+{
+  "embed_config": "pipeline/configs/embed_config.json",
+  "projection_weights": "pipeline/configs/projection_weights.json",
+  "assign": [
+    "pipeline/configs/cuisines.txt",
+    "pipeline/configs/meal_types.txt"
+  ],
+  "encode": [
+    {"config": "pipeline/configs/minutes.json"},
+    {"config": "pipeline/configs/n_steps.json"},
+    {"config": "pipeline/configs/n_ingredients.json"},
+    {"config": "pipeline/configs/submitted.json"},
+    {"config": "pipeline/configs/avg_rating.json",  "contrib": "pipeline/recipe_contrib_ratings.json.gz"},
+    {"config": "pipeline/configs/n_ratings.json",   "contrib": "pipeline/recipe_contrib_ratings.json.gz"}
+  ]
+}

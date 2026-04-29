@@ -3,9 +3,11 @@
 *.npy
 *.pkl
 *.json
-!pipeline/embed_config.json
+!config.json
+!pipeline/configs/*.json
 __pycache__
 *.html
 *.txt
+!pipeline/configs/*.txt
 export/
 pipeline/recipe_contrib_*.json.gz
