@@ -1,0 +1,6 @@
+{
+  "field": "n_ratings",
+  "type": "bins",
+  "centers": [1, 4, 15, 50, 200],
+  "labels": ["1 review", "~5 reviews", "~15 reviews", "~50 reviews", "100+ reviews"]
+}

@@ -1,0 +1,6 @@
+{
+  "field": "avg_rating",
+  "type": "bins",
+  "centers": [1, 2, 3, 4, 4.5, 4.8, 5],
+  "labels": ["1 star", "2 stars", "3 stars", "4 stars", "4.5 stars", "4.8 stars", "5 stars"]
+}
