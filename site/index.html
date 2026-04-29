@@ -26,7 +26,7 @@
       <button class="mode-btn" id="btn-explore">Explore</button>
     </div>
     <div class="topbar-right">
-      <button class="topbar-btn" id="btn-copy-state" title="Copy camera + highlight state for story.json">⎘ Copy state</button>
+      <button class="topbar-btn" id="btn-share">Share</button>
       <button class="topbar-btn" id="btn-about">About</button>
     </div>
   </div>
@@ -101,11 +101,24 @@
   <!-- ── About modal ── -->
   <div id="about-overlay">
     <div id="about-modal">
+      <button id="about-close">✕</button>
       <h2>Food.com Recipes</h2>
       <p>230,000+ recipes from Food.com projected into 3D using UMAP on semantic embeddings. Each point represents a recipe. Proximity indicates semantic similarity.</p>
       <p>Dataset: <a href="https://www.kaggle.com/datasets/shuyangli94/food-com-recipes-and-user-interactions" target="_blank">Food.com Recipes and User Interactions</a></p>
-      <button id="about-close">Close</button>
     </div>
+  </div>
+
+  <!-- ── Share popup ── -->
+  <div id="share-popup">
+    <button id="share-close">✕</button>
+    <span id="share-title">Share</span>
+    <div id="share-url-row">
+      <input id="share-url" type="text" readonly>
+      <button id="share-copy">Copy</button>
+    </div>
+    <label id="share-view-label">
+      <input type="checkbox" id="share-include-view" checked> Include current view
+    </label>
   </div>
 
   <!-- ── Display widget ── -->

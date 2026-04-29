@@ -328,6 +328,94 @@ html, body {
   user-select: none;
 }
 
+/* ── Share popup ───────────────────────────────────────────────────────── */
+#share-popup {
+  position: fixed;
+  top: 52px;
+  right: 12px;
+  width: 300px;
+  background: rgba(22, 22, 36, 0.98);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.60);
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 3000;
+  backdrop-filter: blur(8px);
+}
+#share-popup.open { display: flex; }
+
+#share-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.85);
+}
+
+#share-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-size: 13px;
+  width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 50%;
+  color: rgba(255,255,255,0.55);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+#share-close:hover { background: rgba(255,255,255,0.14); color: rgba(255,255,255,0.90); }
+
+#share-url-row {
+  position: relative;
+  margin-top: 6px;
+}
+
+#share-url {
+  width: 100%;
+  font-size: 11px;
+  padding: 8px 58px 8px 10px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 5px;
+  color: rgba(255,255,255,0.60);
+  outline: none;
+  cursor: text;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#share-view-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.60);
+  cursor: pointer;
+  user-select: none;
+}
+#share-view-label input[type="checkbox"] { cursor: pointer; accent-color: #4e79a7; }
+
+#share-copy {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  padding: 3px 10px;
+  background: rgba(78,121,167,1.00);
+  border: 1px solid rgba(78,121,167,1.00);
+  border-radius: 4px;
+  color: rgba(255,255,255,1.00);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+#share-copy:hover { background: rgba(72,115,155,1.00); }
+
 /* ── Display widget ────────────────────────────────────────────────────── */
 #display-widget {
   position: fixed;
@@ -478,6 +566,7 @@ html, body {
 #about-overlay.open { display: flex; }
 
 #about-modal {
+  position: relative;
   background: rgb(22,22,36);
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 10px;
@@ -502,11 +591,17 @@ html, body {
 #about-modal a:hover { text-decoration: underline; }
 
 #about-close {
-  margin-top: 8px;
-  font-size: 12px; padding: 6px 18px;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-size: 13px;
+  width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
   background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 5px; color: rgba(255,255,255,0.65);
-  cursor: pointer; transition: background 0.12s;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 50%;
+  color: rgba(255,255,255,0.55);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
 }
 #about-close:hover { background: rgba(255,255,255,0.14); color: rgba(255,255,255,0.90); }

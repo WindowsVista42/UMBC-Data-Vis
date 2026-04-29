@@ -911,30 +911,55 @@ function setMode(mode) {
   }
 }
 
-// ── Debug: copy state ─────────────────────────────────────────────────────────
-function copyState() {
-  const pos    = camera.position;
-  const target = controls.target;
-  const family = meta.categories[activeFamilyIdx];
-  const hl     = highlightedLabelIdx >= 0
-    ? { family: family.name, label: family.labels[highlightedLabelIdx] }
-    : null;
+// ── Share ─────────────────────────────────────────────────────────────────────
+function buildShareUrl() {
+  const params = new URLSearchParams();
+  params.set('mode', appMode);
+  if (appMode === 'story') {
+    params.set('step', currentStep);
+  } else {
+    const pos    = camera.position;
+    const target = controls.target;
+    params.set('cam', [pos.x, pos.y, pos.z, target.x, target.y, target.z]
+      .map(v => v.toFixed(3)).join(','));
+    params.set('family', activeFamilyIdx);
+    if (highlightedLabelIdx >= 0) params.set('hl', highlightedLabelIdx);
+  }
+  return `${location.origin}${location.pathname}#${params.toString()}`;
+}
 
-  const snippet = {
-    title:     '',
-    subtitle:  '',
-    colorBy:   family.name,
-    // position is reconstructed from quaternion + distance — store the visual position
-    camera: {
-      position: [+pos.x.toFixed(3), +pos.y.toFixed(3), +pos.z.toFixed(3)],
-      target:   [+target.x.toFixed(3), +target.y.toFixed(3), +target.z.toFixed(3)],
-    },
-    highlight: hl,
-  };
+function applyShareState() {
+  const hash = location.hash.slice(1);
+  if (!hash) return;
+  const params = new URLSearchParams(hash);
+  const mode   = params.get('mode') ?? 'story';
 
-  navigator.clipboard.writeText(JSON.stringify(snippet, null, 2))
-    .then(() => alert('Story step snippet copied to clipboard.'))
-    .catch(() => console.log(JSON.stringify(snippet, null, 2)));
+  if (mode === 'story') {
+    const step = Math.max(0, Math.min(
+      parseInt(params.get('step') ?? '0'), storyData.steps.length - 1
+    ));
+    currentStep = step;
+    setMode('story');
+  } else {
+    setMode('explore');
+    const family = params.get('family');
+    if (family !== null) {
+      const familyIdx = parseInt(family);
+      setActiveFamily(familyIdx);
+      document.querySelectorAll('.cat-tab').forEach((btn, i) => {
+        btn.classList.toggle('active', i === familyIdx);
+      });
+    }
+    const hl = params.get('hl');
+    if (hl !== null) setHighlightLabel(parseInt(hl));
+    const camStr = params.get('cam');
+    if (camStr) {
+      const [px, py, pz, tx, ty, tz] = camStr.split(',').map(Number);
+      animateCameraToPosition([px, py, pz], [tx, ty, tz]);
+    }
+  }
+
+  history.replaceState(null, '', location.pathname);
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
@@ -1034,12 +1059,40 @@ async function boot() {
       document.getElementById('about-overlay').classList.remove('open');
   });
 
-  // Debug copy state
-  document.getElementById('btn-copy-state').addEventListener('click', copyState);
+  // Share popup
+  const sharePopup   = document.getElementById('share-popup');
+  const shareUrlInput = document.getElementById('share-url');
+  const shareInclude  = document.getElementById('share-include-view');
+  const plainUrl      = `${location.origin}${location.pathname}`;
+
+  const refreshShareUrl = () => {
+    shareUrlInput.value = shareInclude.checked ? buildShareUrl() : plainUrl;
+  };
+
+  document.getElementById('btn-share').addEventListener('click', () => {
+    refreshShareUrl();
+    sharePopup.classList.toggle('open');
+  });
+  shareInclude.addEventListener('change', refreshShareUrl);
+  document.getElementById('share-copy').addEventListener('click', () => {
+    navigator.clipboard.writeText(shareUrlInput.value).then(() => {
+      const btn = document.getElementById('share-copy');
+      btn.textContent = '✓ Copied';
+      setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+    });
+  });
+  document.getElementById('share-close').addEventListener('click', () => {
+    sharePopup.classList.remove('open');
+  });
+  document.addEventListener('click', e => {
+    if (!sharePopup.contains(e.target) && e.target !== document.getElementById('btn-share'))
+      sharePopup.classList.remove('open');
+  });
 
   // Story mode default
   initStoryPanel();
   setMode('story');
+  applyShareState();
 
   hideProgress();
 }
