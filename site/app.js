@@ -4,8 +4,8 @@ import { DRACOLoader }   from 'three/addons/loaders/DRACOLoader.js';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const DATA       = 'data/';
-const LEFT_W     = 280;
-const RIGHT_W    = 270;
+const LEFT_W     = 0;
+const RIGHT_W    = 0;
 const TOPBAR_H   = 44;
 const CAT_TEX_W  = 4096;   // texture width for category data buffer
 const MAX_LABELS = 64;     // max labels per category family for uniform arrays
@@ -283,21 +283,18 @@ function initScene(palette) {
   // Initial alpha cache (all visible)
   alphaCache = new Float32Array(N).fill(1.0);
 
-  // UI wiring
-  document.getElementById('fc-reset').addEventListener('click', () => setCameraPreset('reset'));
-  document.getElementById('fc-top').addEventListener('click',   () => setCameraPreset('top'));
-  document.getElementById('fc-front').addEventListener('click', () => setCameraPreset('front'));
-  document.getElementById('fc-side').addEventListener('click',  () => setCameraPreset('side'));
+  // UI wiring — elements may be absent if their panel is commented out in HTML
+  document.getElementById('fc-reset')?.addEventListener('click', () => setCameraPreset('reset'));
+  document.getElementById('fc-top')?.addEventListener('click',   () => setCameraPreset('top'));
+  document.getElementById('fc-front')?.addEventListener('click', () => setCameraPreset('front'));
+  document.getElementById('fc-side')?.addEventListener('click',  () => setCameraPreset('side'));
 
+  const SIZE_MULTIPLIERS = [0.25, 0.5, 1.0, 2.0];
   const sizeSlider = document.getElementById('fc-size');
-  sizeSlider.addEventListener('input', () => {
-    uniforms.uPointSize.value = parseFloat(sizeSlider.value);
-    document.getElementById('fc-size-val').textContent = sizeSlider.value + '×';
-  });
-
-  const outlineBtn = document.getElementById('fc-outline');
-  outlineBtn.addEventListener('click', () => {
-    uniforms.uOutline.value = outlineBtn.classList.toggle('active') ? 1.0 : 0.0;
+  sizeSlider?.addEventListener('input', () => {
+    const mul = SIZE_MULTIPLIERS[parseInt(sizeSlider.value)];
+    uniforms.uPointSize.value = 4.0 * mul;
+    document.getElementById('fc-size-val').textContent = mul + '×';
   });
 
   window.addEventListener('resize', onResize);
@@ -321,7 +318,14 @@ function setHighlightLabel(labelIdx) {
     categoryModes[i] = (labelIdx < 0 || i === labelIdx) ? 0 : 2;
   }
   uniforms.uCategoryModes.value = Array.from(categoryModes);
-  alphaCache.fill(1.0); // all points always raycasted
+  if (labelIdx < 0) {
+    alphaCache.fill(1.0);
+  } else {
+    const famData = getCategoryFamilyData(activeFamilyIdx);
+    for (let i = 0; i < N; i++) {
+      alphaCache[i] = famData[i] === labelIdx ? 1.0 : 0.0;
+    }
+  }
   renderCategoryList();
 }
 
@@ -500,11 +504,12 @@ function onPointerMove(e) {
     const d = Math.hypot(e.clientX - mouseDownX, e.clientY - mouseDownY);
     if (d > DRAG_THRESH) { hideHoverTip(); return; }
   }
+  if (lockedIdx >= 0) return;
   const idx = raycastBest(e);
   if (idx >= 0) {
     showHoverTip(idx);
   } else {
-    if (lockedIdx < 0) hideHoverTip();
+    hideHoverTip();
   }
 }
 
@@ -780,15 +785,21 @@ function showRecipeInfo(idx) {
     const tagsEl = document.getElementById('recipe-tags');
     tagsEl.innerHTML = '';
     meta.categories.forEach((cat, fi) => {
-      const famData = getCategoryFamilyData(fi);
-      const catId   = famData[idx];
-      const label   = cat.labels[catId] ?? '';
-      if (label) {
-        const tag = document.createElement('span');
-        tag.className   = 'recipe-tag';
-        tag.textContent = label;
-        tagsEl.appendChild(tag);
-      }
+      const famData  = getCategoryFamilyData(fi);
+      const labelIdx = famData[idx];
+      const label    = cat.labels[labelIdx] ?? '';
+      if (!label) return;
+      const [r, g, b] = getPaletteRgb(labelIdx);
+      const tr = Math.round(r * 0.45 + 255 * 0.55);
+      const tg = Math.round(g * 0.45 + 255 * 0.55);
+      const tb = Math.round(b * 0.45 + 255 * 0.55);
+      const tag = document.createElement('span');
+      tag.className        = 'recipe-tag';
+      tag.textContent      = label;
+      tag.style.background  = `rgba(${r},${g},${b},0.35)`;
+      tag.style.borderColor = `rgba(${r},${g},${b},0.80)`;
+      tag.style.color       = `rgb(${tr},${tg},${tb})`;
+      tagsEl.appendChild(tag);
     });
 
     const stats = [];
@@ -900,30 +911,55 @@ function setMode(mode) {
   }
 }
 
-// ── Debug: copy state ─────────────────────────────────────────────────────────
-function copyState() {
-  const pos    = camera.position;
-  const target = controls.target;
-  const family = meta.categories[activeFamilyIdx];
-  const hl     = highlightedLabelIdx >= 0
-    ? { family: family.name, label: family.labels[highlightedLabelIdx] }
-    : null;
+// ── Share ─────────────────────────────────────────────────────────────────────
+function buildShareUrl() {
+  const params = new URLSearchParams();
+  params.set('mode', appMode);
+  if (appMode === 'story') {
+    params.set('step', currentStep);
+  } else {
+    const pos    = camera.position;
+    const target = controls.target;
+    params.set('cam', [pos.x, pos.y, pos.z, target.x, target.y, target.z]
+      .map(v => v.toFixed(3)).join(','));
+    params.set('family', activeFamilyIdx);
+    if (highlightedLabelIdx >= 0) params.set('hl', highlightedLabelIdx);
+  }
+  return `${location.origin}${location.pathname}#${params.toString()}`;
+}
 
-  const snippet = {
-    title:     '',
-    subtitle:  '',
-    colorBy:   family.name,
-    // position is reconstructed from quaternion + distance — store the visual position
-    camera: {
-      position: [+pos.x.toFixed(3), +pos.y.toFixed(3), +pos.z.toFixed(3)],
-      target:   [+target.x.toFixed(3), +target.y.toFixed(3), +target.z.toFixed(3)],
-    },
-    highlight: hl,
-  };
+function applyShareState() {
+  const hash = location.hash.slice(1);
+  if (!hash) return;
+  const params = new URLSearchParams(hash);
+  const mode   = params.get('mode') ?? 'story';
 
-  navigator.clipboard.writeText(JSON.stringify(snippet, null, 2))
-    .then(() => alert('Story step snippet copied to clipboard.'))
-    .catch(() => console.log(JSON.stringify(snippet, null, 2)));
+  if (mode === 'story') {
+    const step = Math.max(0, Math.min(
+      parseInt(params.get('step') ?? '0'), storyData.steps.length - 1
+    ));
+    currentStep = step;
+    setMode('story');
+  } else {
+    setMode('explore');
+    const family = params.get('family');
+    if (family !== null) {
+      const familyIdx = parseInt(family);
+      setActiveFamily(familyIdx);
+      document.querySelectorAll('.cat-tab').forEach((btn, i) => {
+        btn.classList.toggle('active', i === familyIdx);
+      });
+    }
+    const hl = params.get('hl');
+    if (hl !== null) setHighlightLabel(parseInt(hl));
+    const camStr = params.get('cam');
+    if (camStr) {
+      const [px, py, pz, tx, ty, tz] = camStr.split(',').map(Number);
+      animateCameraToPosition([px, py, pz], [tx, ty, tz]);
+    }
+  }
+
+  history.replaceState(null, '', location.pathname);
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
@@ -1023,12 +1059,40 @@ async function boot() {
       document.getElementById('about-overlay').classList.remove('open');
   });
 
-  // Debug copy state
-  document.getElementById('btn-copy-state').addEventListener('click', copyState);
+  // Share popup
+  const sharePopup   = document.getElementById('share-popup');
+  const shareUrlInput = document.getElementById('share-url');
+  const shareInclude  = document.getElementById('share-include-view');
+  const plainUrl      = `${location.origin}${location.pathname}`;
+
+  const refreshShareUrl = () => {
+    shareUrlInput.value = shareInclude.checked ? buildShareUrl() : plainUrl;
+  };
+
+  document.getElementById('btn-share').addEventListener('click', () => {
+    refreshShareUrl();
+    sharePopup.classList.toggle('open');
+  });
+  shareInclude.addEventListener('change', refreshShareUrl);
+  document.getElementById('share-copy').addEventListener('click', () => {
+    navigator.clipboard.writeText(shareUrlInput.value).then(() => {
+      const btn = document.getElementById('share-copy');
+      btn.textContent = '✓ Copied';
+      setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+    });
+  });
+  document.getElementById('share-close').addEventListener('click', () => {
+    sharePopup.classList.remove('open');
+  });
+  document.addEventListener('click', e => {
+    if (!sharePopup.contains(e.target) && e.target !== document.getElementById('btn-share'))
+      sharePopup.classList.remove('open');
+  });
 
   // Story mode default
   initStoryPanel();
   setMode('story');
+  applyShareState();
 
   hideProgress();
 }
