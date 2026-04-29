@@ -1,0 +1,5 @@
+main-dish
+desserts
+side-dishes
+appetizers
+beverages

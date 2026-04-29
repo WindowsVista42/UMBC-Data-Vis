@@ -61,11 +61,27 @@ def main():
     with open(args.config, encoding="utf-8") as f:
         config = json.load(f)
 
-    assign_files = config.get("assign", [])
-    encode_steps = config.get("encode", [])
+    embed_config       = config.get("embed_config",       "pipeline/configs/embed_config.json")
+    projection_weights = config.get("projection_weights", "pipeline/configs/projection_weights.json")
+    assign_files       = config.get("assign", [])
+    encode_steps       = config.get("encode", [])
 
-    start   = STEPS.index(args.start_from)
-    active  = lambda step: STEPS.index(step) >= start
+    # Verify all required config files exist before starting any step
+    required = [
+        embed_config,
+        projection_weights,
+        *assign_files,
+        *[step["config"] for step in encode_steps],
+    ]
+    missing = [p for p in required if not os.path.exists(os.path.join(SCRIPT_DIR, p))]
+    if missing:
+        print("ERROR: Missing required config files:")
+        for p in missing:
+            print(f"  {p}")
+        sys.exit(1)
+
+    start  = STEPS.index(args.start_from)
+    active = lambda step: STEPS.index(step) >= start
 
     print(f"Pipeline config: {args.config}")
     print(f"Starting from:   {args.start_from}")
@@ -74,7 +90,7 @@ def main():
         run(uv("download.py"))
 
     if active("embed"):
-        run(uv("pipeline/embed.py"))
+        run(uv("pipeline/embed.py", "--config", embed_config))
 
     if active("assign"):
         for txt_file in assign_files:
@@ -92,7 +108,7 @@ def main():
             run(cmd)
 
     if active("project"):
-        run(uv("pipeline/project.py"))
+        run(uv("pipeline/project.py", "--weights", projection_weights))
 
     if active("export"):
         run(uv("pipeline/export.py"))

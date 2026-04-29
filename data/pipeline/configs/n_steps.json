@@ -1,0 +1,6 @@
+{
+  "field": "n_steps",
+  "type": "bins",
+  "centers": [3, 8, 15, 25],
+  "labels": ["1-5 steps", "6-10 steps", "11-20 steps", "21+ steps"]
+}

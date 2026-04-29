@@ -1,0 +1,18 @@
+{
+  "field": "minutes",
+  "type": "bins",
+  "centers": [
+    15,
+    30,
+    60,
+    120,
+    240
+  ],
+  "labels": [
+    "~15 min",
+    "~30 min",
+    "~1 hour",
+    "~2 hours",
+    "4+ hours"
+  ]
+}
