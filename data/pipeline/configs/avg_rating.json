@@ -2,6 +2,7 @@
   "field": "avg_rating",
   "type": "bins",
   "edges": [
+    0.5,
     2,
     3,
     4,
@@ -10,6 +11,7 @@
     4.9999
   ],
   "labels": [
+    "no rating",
     "1 star",
     "2 stars",
     "3 stars",
@@ -17,5 +19,6 @@
     "4.5 stars",
     "4.8 stars",
     "5 stars"
-  ]
+  ],
+  "missing_value": 0
 }
