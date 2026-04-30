@@ -128,25 +128,49 @@ def main():
     with open(args.config, encoding="utf-8") as f:
         config = json.load(f)
 
-    field         = config["field"]
-    kind          = config.get("type", "bins")
-    missing_value = config.get("missing_value", None)
+    field      = config["field"]
+    kind       = config.get("type", "bins")
+    missing_cfg = config.get("missing_value", None)
+
+    if missing_cfg is None:
+        one_hot_missing = False
+        missing_val     = None
+        missing_label   = None
+    elif isinstance(missing_cfg, dict) and missing_cfg.get("type") == "one_hot":
+        one_hot_missing = True
+        missing_val     = None
+        missing_label   = missing_cfg["label"]
+    elif isinstance(missing_cfg, dict) and missing_cfg.get("type") == "value":
+        one_hot_missing = False
+        missing_val     = missing_cfg["value"]
+        missing_label   = None
+    else:
+        print(f"ERROR: missing_value must be {{\"type\": \"one_hot\", \"label\": \"...\"}} or {{\"type\": \"value\", \"value\": N}}")
+        sys.exit(1)
 
     if kind == "bins":
         edges  = config["edges"]
         labels = config["labels"]
         assert len(labels) == len(edges) + 1, "labels must have exactly len(edges)+1 entries"
+        if one_hot_missing:
+            labels = [missing_label] + labels
         print(f"Field '{field}': {len(labels)} hard bins -> single normalized value")
-        for i, label in enumerate(labels):
+        if one_hot_missing:
+            print(f"  [missing]         '{missing_label}'")
+        for i, label in enumerate(config["labels"]):
             lo = f"{edges[i-1]}" if i > 0 else "-inf"
             hi = f"{edges[i]}"   if i < len(edges) else "+inf"
-            print(f"  [{lo}, {hi})  '{label}'  -> {i / (len(labels) - 1):.3f}")
+            print(f"  [{lo}, {hi})  '{label}'")
     elif kind == "soft_bins":
         centers = config["centers"]
         labels  = config["labels"]
         assert len(centers) == len(labels), "centers and labels must have the same length"
+        if one_hot_missing:
+            labels = [missing_label] + labels
         print(f"Field '{field}': {len(labels)} soft bins -> single normalized value")
-        for label, center in zip(labels, centers):
+        if one_hot_missing:
+            print(f"  [missing]         '{missing_label}'")
+        for label, center in zip(config["labels"], centers):
             print(f"  center={center:<6}  '{label}'")
     elif kind == "normalize":
         labels = [config["label"]]
@@ -159,7 +183,9 @@ def main():
         index = json.load(f)
     id_to_idx = {entry["id"]: entry["index"] for entry in index}
 
-    features = np.zeros((len(index), 1), dtype=np.float32)
+    n_cols      = 2 if one_hot_missing else 1
+    features    = np.zeros((len(index), n_cols), dtype=np.float32)
+    bin_indices = np.zeros(len(index), dtype=np.int32)
 
     contrib_data = None
     if args.contrib:
@@ -197,16 +223,27 @@ def main():
     def encode_row(row, val):
         nonlocal missing
         if val is None:
-            if missing_value is not None:
-                val = missing_value
+            if one_hot_missing:
+                features[row, 0] = 0.0
+                features[row, 1] = 1.0
+                # bin_indices[row] stays 0 = missing_label (prepended)
+                missing += 1
+                return
+            elif missing_val is not None:
+                val = missing_val
             else:
                 features[row, 0] = 0.5
                 missing += 1
                 return
+        offset = 1 if one_hot_missing else 0
         if kind == "bins":
-            features[row, 0] = hard_bin_position(val, edges)
+            idx = next((i for i, e in enumerate(edges) if val < e), len(edges))
+            bin_indices[row]  = idx + offset
+            features[row, 0]  = hard_bin_position(val, edges)
         elif kind == "soft_bins":
-            features[row, 0] = soft_bin_position(val, centers)
+            idx = min(range(len(centers)), key=lambda i: abs(centers[i] - val))
+            bin_indices[row]  = idx + offset
+            features[row, 0]  = soft_bin_position(val, centers)
         else:
             features[row, 0] = (val - vmin) / (vmax - vmin) if vmax > vmin else 0.5
 
@@ -242,9 +279,9 @@ def main():
         n_bins = len(labels)
         results = []
         for entry in index:
-            val     = float(features[entry["index"], 0])
-            bin_idx = int(round(val * (n_bins - 1)))
-            bin_idx = max(0, min(n_bins - 1, bin_idx))
+            row     = entry["index"]
+            val     = float(features[row, 0])
+            bin_idx = int(bin_indices[row])
             results.append({
                 "id":       entry["id"],
                 "category": labels[bin_idx],

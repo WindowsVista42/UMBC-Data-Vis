@@ -125,14 +125,28 @@ def main():
     categories    = []  # bin-type: {stem, labels, data (N,) uint8}
     scalars       = []  # normalize-type: {stem, label, data (N,) float32}
 
+    id_to_row = {entry["id"]: entry["index"] for entry in index}
+
     for stem, npy_path, classes in feature_files:
         arr = np.load(npy_path)  # (N, k)
         if len(classes) > 1:
-            if arr.shape[1] == 1:
-                # Ordinal: single float [0,1] -> bin index
-                n = len(classes)
-                cat_ids = np.round(arr[:, 0] * (n - 1)).clip(0, n - 1).astype(np.uint8)
-                print(f"  [ordinal]   {stem}  ({n} labels)")
+            if arr.shape[1] <= 2:
+                # Ordinal (bins or soft_bins): read bin index from per-recipe JSON
+                json_path = npy_path.replace("_features.npy", ".json")
+                if os.path.exists(json_path):
+                    with open(json_path, encoding="utf-8") as f:
+                        assignments = json.load(f)
+                    label_to_idx = {lbl: i for i, lbl in enumerate(classes)}
+                    cat_ids = np.zeros(N, dtype=np.uint8)
+                    for entry in assignments:
+                        row = id_to_row.get(entry["id"])
+                        if row is not None:
+                            cat_ids[row] = label_to_idx.get(entry["category"], 0)
+                    print(f"  [ordinal]   {stem}  ({len(classes)} labels)")
+                else:
+                    n = len(classes)
+                    cat_ids = np.round(arr[:, 0] * (n - 1)).clip(0, n - 1).astype(np.uint8)
+                    print(f"  [ordinal]   {stem}  ({len(classes)} labels, fallback)")
             else:
                 # Multi-column proba: argmax -> category index
                 cat_ids = np.argmax(arr, axis=1).astype(np.uint8)
@@ -233,7 +247,8 @@ def main():
 
     # Write metadata chunks (Z-order sorted, keyed by recipe_id string)
     print(f"Writing {n_chunks} metadata chunks (chunk_size={args.chunk_size})...")
-    for chunk_idx in range(n_chunks):
+
+    def write_chunk(chunk_idx):
         start = chunk_idx * args.chunk_size
         end   = min(start + args.chunk_size, N)
         chunk_data = {}
@@ -243,13 +258,20 @@ def main():
             entry   = dict(base_meta.get(rid, {}))
             entry.update(contrib.get(rid_str, {}))
             chunk_data[rid_str] = entry
-
         chunk_path = os.path.join(chunks_dir, f"chunk_{chunk_idx:06d}.json.gz")
         with gzip.open(chunk_path, "wt", encoding="utf-8") as f:
             json.dump(chunk_data, f, separators=(",", ":"), ensure_ascii=False)
+        return chunk_idx
 
-        if chunk_idx % 100 == 0 or chunk_idx == n_chunks - 1:
-            print(f"  {chunk_idx + 1} / {n_chunks}", flush=True)
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    completed = 0
+    with ThreadPoolExecutor() as executor:
+        futures = {executor.submit(write_chunk, i): i for i in range(n_chunks)}
+        for future in as_completed(futures):
+            future.result()
+            completed += 1
+            if completed % 100 == 0 or completed == n_chunks:
+                print(f"  {completed} / {n_chunks}", flush=True)
 
     # Write meta.json
     meta = {
