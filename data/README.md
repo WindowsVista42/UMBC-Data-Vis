@@ -22,6 +22,19 @@ Converted from CSV on download so that all list fields are proper JSON arrays ra
 
 ---
 
+## Directory structure
+
+```
+data/
+  pipeline/         pipeline scripts
+    configs/        hand-authored config files (tracked by git)
+  artifacts/        all generated outputs (gitignored), removed by clean.py
+  export/           final web app package (gitignored), removed by clean.py
+  raw/              downloaded dataset files (gitignored)
+```
+
+---
+
 ## Running the full pipeline
 
 ```
@@ -37,7 +50,14 @@ uv run run.py --from project
 
 Available steps: `download`, `embed`, `assign`, `ratings`, `encode`, `project`, `export`
 
-`run.py` reads `config.json` for all pipeline settings and checks that every referenced config file exists before starting. It also auto-copies the export to `../site/data/` at the end.
+`run.py` reads `config.json` for all pipeline settings and checks that every referenced config file exists before starting. The export step auto-copies output to `../site/data/`.
+
+To remove all generated outputs:
+
+```
+uv run clean.py           # removes artifacts/ and export/
+uv run clean.py --dry-run # preview what would be removed
+```
 
 ---
 
@@ -54,13 +74,13 @@ Downloads all dataset files into `raw/` and produces `raw/RAW_recipes.jsonl`.
 ### 2. Embed
 
 ```
-uv run pipeline/embed.py --config pipeline/configs/embed_config.json
+uv run pipeline/embed.py
 ```
 
-Encodes each recipe as a 384-dim vector using `all-MiniLM-L6-v2`. The text fed to the model is controlled by `pipeline/configs/embed_config.json`. Uses GPU automatically if available. Outputs:
+Encodes each recipe as a 384-dim vector using `all-MiniLM-L6-v2`. The text fed to the model is controlled by `pipeline/configs/embed_config.json`. Uses GPU automatically if available. Outputs to `artifacts/`:
 
-- `pipeline/recipes_embeddings.npy` - shape `(N, 384)`, L2-normalized
-- `pipeline/recipes_index.json` - maps row index to recipe ID
+- `recipes_embeddings.npy` - shape `(N, 384)`, L2-normalized
+- `recipes_index.json` - maps row index to recipe ID
 
 ### 3. Assign categories
 
@@ -72,9 +92,14 @@ uv run pipeline/derive_taxonomy.py pipeline/configs/meal_types.txt
 uv run pipeline/assign.py pipeline/configs/meal_types.txt
 ```
 
-Uses k-NN classification (k=100, distance-weighted, cosine) seeded by Food.com's own tags to classify all recipes. `derive_taxonomy.py` derives parent-child tag relationships from co-occurrence data so the most specific label is used for training. Prior correction removes class imbalance bias from the k-NN posterior.
+Uses k-NN classification (k=100, distance-weighted, cosine) seeded by Food.com's own tags to classify all recipes. `derive_taxonomy.py` derives parent-child tag relationships from co-occurrence data so the most specific label is used for training. A recipe tagged both `american` and `southern-united-states` trains as `southern-united-states`. Prior correction removes class imbalance bias from the k-NN posterior.
 
-Each run outputs `pipeline/recipes_{name}.json` (per-recipe assignment), `pipeline/recipes_{name}_proba.npy` (full probability matrix for UMAP), and `pipeline/recipes_{name}_classes.json`.
+`derive_taxonomy.py` must be run before `assign.py` for each category file. Without the taxonomy, recipes with multiple matching tags are treated as ambiguous and excluded from training. Child categories (e.g. regional US cuisines) silently disappear from output if the taxonomy is missing.
+
+Each run outputs to `artifacts/`:
+- `recipes_{name}_proba.npy` - full probability matrix for UMAP augmentation
+- `recipes_{name}_classes.json` - ordered list of category labels
+- `classification_output/recipes_{name}.json` - per-recipe top assignment with score and runners-up
 
 To find what tags are available for a given parent:
 ```
@@ -88,11 +113,11 @@ uv run pipeline/cuisine_tags.py --parent course    # meal/course tags
 uv run pipeline/process_ratings.py
 ```
 
-Computes per-recipe `avg_rating` and `n_ratings` from `raw/RAW_interactions.csv`, excluding zero ratings. Writes `pipeline/recipe_contrib_ratings.json.gz` which `export.py` picks up automatically.
+Computes per-recipe `avg_rating` and `n_ratings` from `raw/RAW_interactions.csv`, excluding zero ratings. Writes `artifacts/recipe_contrib_ratings.json.gz` which `export.py` picks up automatically.
 
 ### 5. Encode additional features
 
-Each script produces a `*_features.npy` file that `project.py` picks up automatically.
+Each script produces a `*_features.npy` file in `artifacts/` that `project.py` picks up automatically.
 
 **Numeric (soft bins or normalized):**
 ```
@@ -104,8 +129,8 @@ uv run pipeline/numeric_encode.py pipeline/configs/submitted.json
 
 **From a contrib file (e.g. ratings not in the JSONL):**
 ```
-uv run pipeline/numeric_encode.py pipeline/configs/avg_rating.json --contrib pipeline/recipe_contrib_ratings.json.gz
-uv run pipeline/numeric_encode.py pipeline/configs/n_ratings.json  --contrib pipeline/recipe_contrib_ratings.json.gz
+uv run pipeline/numeric_encode.py pipeline/configs/avg_rating.json --contrib artifacts/recipe_contrib_ratings.json.gz
+uv run pipeline/numeric_encode.py pipeline/configs/n_ratings.json  --contrib artifacts/recipe_contrib_ratings.json.gz
 ```
 
 See `pipeline/PLAN.md` for the encoding types (`bins` vs `normalize`) and how to write new config files.
@@ -113,10 +138,13 @@ See `pipeline/PLAN.md` for the encoding types (`bins` vs `normalize`) and how to
 ### 6. Project
 
 ```
-uv run pipeline/project.py --weights pipeline/configs/projection_weights.json
+uv run pipeline/project.py
 ```
 
-Runs UMAP on the embeddings augmented with all category and feature vectors. Weights for each input are tunable in `pipeline/configs/projection_weights.json`. Outputs `pipeline/recipes_umap3d.npy` and `pipeline/recipes_umap3d_index.json`. Pass `--dims 2` for a 2D projection.
+Runs UMAP on the embeddings augmented with all category and feature vectors found in `artifacts/`. Weights for each input are tunable in `pipeline/configs/projection_weights.json`. Outputs to `artifacts/`:
+- `recipes_umap3d.npy` and `recipes_umap3d_index.json`
+
+Pass `--dims 2` for a 2D projection.
 
 ### 7. Export
 
@@ -132,13 +160,13 @@ Packages everything into the format the web app expects. Outputs to `export/` an
 
 Points are sorted by Z-order (Morton code) so nearby points in 3D space land in the same metadata chunk.
 
-To add extra metadata fields: write a `pipeline/recipe_contrib_*.json.gz` (keyed by recipe ID string) and re-run `export.py`. No other changes needed.
+To add extra metadata fields: write a `artifacts/recipe_contrib_*.json.gz` (keyed by recipe ID string) and re-run `export.py`. No other changes needed.
 
 ---
 
 ## Config files
 
-All hand-authored config files live in **`pipeline/configs/`** and are tracked by git. Pipeline outputs (`.npy`, `.json` results, etc.) are gitignored.
+All hand-authored config files live in **`pipeline/configs/`** and are tracked by git. Generated artifacts are in `artifacts/` and are gitignored.
 
 **`config.json`** - top-level pipeline config read by `run.py`. Fields:
 - `embed_config` - path to embed config
