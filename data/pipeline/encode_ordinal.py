@@ -85,13 +85,20 @@ def extract_value(recipe, field):
 
 def hard_bin_position(value, edges):
     """Return normalized bin position in [0, 1] using hard boundaries."""
-    n_bins = len(edges) + 1
-    idx = n_bins - 1
-    for i, edge in enumerate(edges):
-        if value < edge:
-            idx = i
-            break
-    return idx / (n_bins - 1)
+    n = len(edges) + 1
+    idx = n - 1
+
+    if value <= edges[0]:
+        return 0.0
+    if value >= edges[-1]:
+        return 1.0
+    for i in range(n - 1):
+        if edges[i] < value <= edges[i + 1]:
+            t = (value - edges[i]) / (edges[i + 1] - edges[i])
+            pos_lo = i / (n - 1)
+            pos_hi = (i + 1) / (n - 1)
+            return pos_lo + t * (pos_hi - pos_lo)
+    return 0.5
 
 
 def soft_bin_position(value, centers):
@@ -121,8 +128,9 @@ def main():
     with open(args.config, encoding="utf-8") as f:
         config = json.load(f)
 
-    field = config["field"]
-    kind  = config.get("type", "bins")
+    field         = config["field"]
+    kind          = config.get("type", "bins")
+    missing_value = config.get("missing_value", None)
 
     if kind == "bins":
         edges  = config["edges"]
@@ -189,9 +197,12 @@ def main():
     def encode_row(row, val):
         nonlocal missing
         if val is None:
-            features[row, 0] = 0.5
-            missing += 1
-            return
+            if missing_value is not None:
+                val = missing_value
+            else:
+                features[row, 0] = 0.5
+                missing += 1
+                return
         if kind == "bins":
             features[row, 0] = hard_bin_position(val, edges)
         elif kind == "soft_bins":
