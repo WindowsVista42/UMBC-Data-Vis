@@ -85,6 +85,26 @@ Two approaches exist for adding category information to the UMAP:
 
 ---
 
+## Directory structure: configs/, artifacts/, export/
+
+Pipeline files are split into three directories at the `data/` level:
+
+- `pipeline/configs/` — hand-authored config files tracked by git (`.txt` category lists, JSON encode configs, embed template, projection weights). These are inputs to the pipeline, not outputs.
+- `artifacts/` — all generated outputs (embeddings, proba/feature arrays, taxonomy files, contrib files, UMAP coordinates). Gitignored. Deleted by `clean.py`.
+- `export/` — final packaged output for the web app (Draco geometry, attributes binary, metadata chunks). Gitignored. Also deleted by `clean.py`.
+
+Keeping `pipeline/` as pure code with no generated data makes it easy to see what is authored vs. what is computed, and makes cleanup trivial.
+
+---
+
+## Pipeline runner: run.py + config.json
+
+`run.py` is the single entry point for running the full pipeline. It reads `config.json` at the `data/` root, which specifies all variable inputs: the embed config, projection weights, assign category files, and encode steps. Before running any step, it checks that all referenced config files exist and reports missing ones clearly.
+
+`config.json` is the only place you need to edit to add a new category family or numeric feature — `run.py` and the individual scripts pick up the changes automatically. Use `--from <step>` to resume from any step without re-running earlier ones.
+
+---
+
 ## Separate scripts for each pipeline stage
 
 The pipeline is split into independent scripts (embed, assign, project, tag_encode, numeric_encode) rather than one monolithic script. Each step writes files that the next step reads. This means:

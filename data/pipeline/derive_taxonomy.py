@@ -20,6 +20,7 @@ import os
 from collections import Counter, defaultdict
 
 SCRIPT_DIR      = os.path.dirname(os.path.abspath(__file__))
+ARTIFACTS_DIR   = os.path.join(SCRIPT_DIR, "..", "artifacts")
 JSONL_PATH      = os.path.join(SCRIPT_DIR, "..", "raw", "RAW_recipes.jsonl")
 CHILD_THRESHOLD = 0.99
 
@@ -33,8 +34,9 @@ def parse_args():
 def main():
     args     = parse_args()
     base     = os.path.splitext(os.path.basename(args.categories))[0]
-    out_json = os.path.join(SCRIPT_DIR, f"{base}_taxonomy.json")
-    out_txt  = os.path.join(SCRIPT_DIR, f"{base}_taxonomy.txt")
+    os.makedirs(ARTIFACTS_DIR, exist_ok=True)
+    out_json = os.path.join(ARTIFACTS_DIR, f"{base}_taxonomy.json")
+    out_txt  = os.path.join(ARTIFACTS_DIR, f"{base}_taxonomy.txt")
 
     with open(args.categories, encoding="utf-8") as f:
         cuisines = [line.strip() for line in f if line.strip()]

@@ -9,5 +9,5 @@ __pycache__
 *.html
 *.txt
 !pipeline/configs/*.txt
+artifacts/
 export/
-pipeline/recipe_contrib_*.json.gz

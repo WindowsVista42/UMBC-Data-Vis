@@ -36,9 +36,9 @@ import numpy as np
 from sklearn.neighbors import KNeighborsClassifier
 
 SCRIPT_DIR         = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_EMBEDDINGS = os.path.join(SCRIPT_DIR, "recipes_embeddings.npy")
-DEFAULT_INDEX      = os.path.join(SCRIPT_DIR, "recipes_index.json")
-DEFAULT_TAXONOMY   = os.path.join(SCRIPT_DIR, "cuisine_taxonomy.json")
+ARTIFACTS_DIR      = os.path.join(SCRIPT_DIR, "..", "artifacts")
+DEFAULT_EMBEDDINGS = os.path.join(ARTIFACTS_DIR, "recipes_embeddings.npy")
+DEFAULT_INDEX      = os.path.join(ARTIFACTS_DIR, "recipes_index.json")
 JSONL_PATH         = os.path.join(SCRIPT_DIR, "..", "raw", "RAW_recipes.jsonl")
 PREDICT_BATCH_SIZE = 10_000
 
@@ -67,7 +67,7 @@ def load_categories(path):
 
 def output_path(categories_file):
     name = os.path.splitext(os.path.basename(categories_file))[0]
-    return os.path.join(SCRIPT_DIR, f"recipes_{name}.json")
+    return os.path.join(ARTIFACTS_DIR, f"recipes_{name}.json")
 
 
 def most_specific_tag(matching_tags, parent_of):
@@ -94,7 +94,7 @@ def main():
     print(f"Categories ({len(categories)}): {', '.join(categories)}")
 
     base     = os.path.splitext(os.path.basename(args.categories))[0]
-    taxonomy_path = args.taxonomy or os.path.join(SCRIPT_DIR, f"{base}_taxonomy.json")
+    taxonomy_path = args.taxonomy or os.path.join(ARTIFACTS_DIR, f"{base}_taxonomy.json")
 
     parent_of = {}
     if os.path.exists(taxonomy_path):
