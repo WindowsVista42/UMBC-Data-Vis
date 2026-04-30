@@ -1,6 +1,17 @@
 {
   "field": "n_steps",
-  "type": "soft_bins",
-  "centers": [3, 8, 15, 25],
-  "labels": ["1-5 steps", "6-10 steps", "11-20 steps", "21+ steps"]
+  "type": "bins",
+  "edges": [
+    6,
+    11,
+    16,
+    21
+  ],
+  "labels": [
+    "1-5 steps",
+    "6-10 steps",
+    "11-15 steps",
+    "16-20 steps",
+    "20+ steps"
+  ]
 }

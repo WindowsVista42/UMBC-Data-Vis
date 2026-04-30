@@ -1,11 +1,6 @@
 {
-  "embeddings": 5.0,
-  "default": 1.0,
-  "cuisines_proba": 8.0,
-  "meal_types_proba": 1.5,
-  "n_steps_features": 1.5,
-  "minutes_features": 2.0,
-  "n_ingredients_features": 1.5,
-  "avg_rating_features": 2.5,
-  "n_ratings_features": 1.5
+  "embeddings": 1.0,
+  "default": 0.0,
+  "cuisines_proba": 1.0,
+  "meal_types_proba": 1.0
 }
