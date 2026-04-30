@@ -128,12 +128,17 @@ def main():
     for stem, npy_path, classes in feature_files:
         arr = np.load(npy_path)  # (N, k)
         if len(classes) > 1:
-            # Bin-type: argmax -> category index
-            cat_ids = np.argmax(arr, axis=1).astype(np.uint8)
+            if arr.shape[1] == 1:
+                # Ordinal: single float [0,1] -> bin index
+                n = len(classes)
+                cat_ids = np.round(arr[:, 0] * (n - 1)).clip(0, n - 1).astype(np.uint8)
+                print(f"  [ordinal]   {stem}  ({n} labels)")
+            else:
+                # Multi-column proba: argmax -> category index
+                cat_ids = np.argmax(arr, axis=1).astype(np.uint8)
+                print(f"  [bin]       {stem}  ({len(classes)} labels)")
             categories.append({"stem": stem, "labels": classes, "data": cat_ids})
-            print(f"  [bin]       {stem}  ({len(classes)} labels)")
         else:
-            # Normalize-type: single float column
             scalars.append({"stem": stem, "label": classes[0], "data": arr[:, 0].astype(np.float32)})
             print(f"  [normalize] {stem}  label='{classes[0]}'")
 

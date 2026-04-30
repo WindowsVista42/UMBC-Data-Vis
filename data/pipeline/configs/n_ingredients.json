@@ -1,6 +1,6 @@
 {
   "field": "n_ingredients",
-  "type": "bins",
+  "type": "soft_bins",
   "centers": [5, 8, 12, 17],
   "labels": ["1-6 ingredients", "7-10 ingredients", "11-14 ingredients", "15+ ingredients"]
 }

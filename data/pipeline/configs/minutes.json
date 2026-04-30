@@ -1,6 +1,6 @@
 {
   "field": "minutes",
-  "type": "bins",
+  "type": "soft_bins",
   "centers": [
     15,
     30,

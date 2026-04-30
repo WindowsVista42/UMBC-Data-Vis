@@ -121,19 +121,19 @@ Each script produces a `*_features.npy` file in `artifacts/` that `project.py` p
 
 **Numeric (soft bins or normalized):**
 ```
-uv run pipeline/numeric_encode.py pipeline/configs/minutes.json
-uv run pipeline/numeric_encode.py pipeline/configs/n_steps.json
-uv run pipeline/numeric_encode.py pipeline/configs/n_ingredients.json
-uv run pipeline/numeric_encode.py pipeline/configs/submitted.json
+uv run pipeline/encode_ordinal.py pipeline/configs/minutes.json
+uv run pipeline/encode_ordinal.py pipeline/configs/n_steps.json
+uv run pipeline/encode_ordinal.py pipeline/configs/n_ingredients.json
+uv run pipeline/encode_ordinal.py pipeline/configs/submitted.json
 ```
 
 **From a contrib file (e.g. ratings not in the JSONL):**
 ```
-uv run pipeline/numeric_encode.py pipeline/configs/avg_rating.json --contrib artifacts/recipe_contrib_ratings.json.gz
-uv run pipeline/numeric_encode.py pipeline/configs/n_ratings.json  --contrib artifacts/recipe_contrib_ratings.json.gz
+uv run pipeline/encode_ordinal.py pipeline/configs/avg_rating.json --contrib artifacts/recipe_contrib_ratings.json.gz
+uv run pipeline/encode_ordinal.py pipeline/configs/n_ratings.json  --contrib artifacts/recipe_contrib_ratings.json.gz
 ```
 
-See `pipeline/PLAN.md` for the encoding types (`bins` vs `normalize`) and how to write new config files.
+Encoding types: `bins` (hard boundaries, explicit edges), `soft_bins` (interpolated centers), `normalize` (min-max). See `pipeline/PLAN.md` for config format details.
 
 ### 6. Project
 
