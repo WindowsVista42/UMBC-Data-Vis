@@ -1,6 +1,16 @@
 {
   "field": "n_ingredients",
   "type": "bins",
-  "centers": [5, 8, 12, 17],
-  "labels": ["1-6 ingredients", "7-10 ingredients", "11-14 ingredients", "15+ ingredients"]
+  "output": "rank_hot",
+  "edges": [
+    5,
+    10,
+    20
+  ],
+  "labels": [
+    "<5 ingredients",
+    "5-10 ingredients",
+    "11-20 ingredients",
+    "20+ ingredients"
+  ]
 }

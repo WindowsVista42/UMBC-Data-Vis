@@ -1,7 +1,8 @@
 {
   "field": "minutes",
   "type": "bins",
-  "centers": [
+  "output": "rank_hot",
+  "edges": [
     15,
     30,
     60,
@@ -9,10 +10,11 @@
     240
   ],
   "labels": [
-    "~15 min",
-    "~30 min",
-    "~1 hour",
-    "~2 hours",
-    "4+ hours"
+    "<15 min",
+    "16-30 min",
+    "31-60 min",
+    "1-2 hrs",
+    "2-4 hrs",
+    "4+ hrs"
   ]
 }

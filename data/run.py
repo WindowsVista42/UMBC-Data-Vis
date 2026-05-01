@@ -102,7 +102,7 @@ def main():
 
     if active("encode"):
         for step in encode_steps:
-            cmd = uv("pipeline/numeric_encode.py", step["config"])
+            cmd = uv("pipeline/encode_ordinal.py", step["config"])
             if "contrib" in step:
                 cmd += ["--contrib", step["contrib"]]
             run(cmd)

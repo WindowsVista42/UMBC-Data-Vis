@@ -1,6 +1,25 @@
 {
   "field": "n_ratings",
   "type": "bins",
-  "centers": [1, 4, 15, 50, 200],
-  "labels": ["1 review", "~5 reviews", "~15 reviews", "~50 reviews", "100+ reviews"]
+  "output": "rank_hot",
+  "edges": [
+    0.5,
+    2,
+    6,
+    11,
+    21,
+    51,
+    100
+  ],
+  "labels": [
+    "no reviews",
+    "1 review",
+    "2-5 reviews",
+    "6-10 reviews",
+    "11-20 reviews",
+    "21-50 reviews",
+    "51-100 reviews",
+    "100+ reviews"
+  ],
+  "missing_value": {"type": "value", "value": 0}
 }
