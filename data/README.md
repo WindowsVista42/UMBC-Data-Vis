@@ -133,7 +133,7 @@ uv run pipeline/encode_ordinal.py pipeline/configs/avg_rating.json --contrib art
 uv run pipeline/encode_ordinal.py pipeline/configs/n_ratings.json  --contrib artifacts/recipe_contrib_ratings.json.gz
 ```
 
-Encoding types: `bins` (hard boundaries, explicit edges), `soft_bins` (interpolated centers), `normalize` (min-max). See `pipeline/PLAN.md` for config format details.
+Encoding types: `bins` (hard boundaries with rank-hot output by default), `normalize` (min-max scalar). See `pipeline/PLAN.md` for config format details.
 
 ### 6. Project
 

@@ -130,25 +130,20 @@ def main():
     for stem, npy_path, classes in feature_files:
         arr = np.load(npy_path)  # (N, k)
         if len(classes) > 1:
-            if arr.shape[1] <= 2:
-                # Ordinal (bins or soft_bins): read bin index from per-recipe JSON
-                json_path = npy_path.replace("_features.npy", ".json")
-                if os.path.exists(json_path):
-                    with open(json_path, encoding="utf-8") as f:
-                        assignments = json.load(f)
-                    label_to_idx = {lbl: i for i, lbl in enumerate(classes)}
-                    cat_ids = np.zeros(N, dtype=np.uint8)
-                    for entry in assignments:
-                        row = id_to_row.get(entry["id"])
-                        if row is not None:
-                            cat_ids[row] = label_to_idx.get(entry["category"], 0)
-                    print(f"  [ordinal]   {stem}  ({len(classes)} labels)")
-                else:
-                    n = len(classes)
-                    cat_ids = np.round(arr[:, 0] * (n - 1)).clip(0, n - 1).astype(np.uint8)
-                    print(f"  [ordinal]   {stem}  ({len(classes)} labels, fallback)")
+            json_path = npy_path.replace("_features.npy", ".json") if "_features.npy" in npy_path else None
+            if json_path and os.path.exists(json_path):
+                # Ordinal (bins): read bin index from per-recipe JSON
+                with open(json_path, encoding="utf-8") as f:
+                    assignments = json.load(f)
+                label_to_idx = {lbl: i for i, lbl in enumerate(classes)}
+                cat_ids = np.zeros(N, dtype=np.uint8)
+                for entry in assignments:
+                    row = id_to_row.get(entry["id"])
+                    if row is not None:
+                        cat_ids[row] = label_to_idx.get(entry["category"], 0)
+                print(f"  [ordinal]   {stem}  ({len(classes)} labels)")
             else:
-                # Multi-column proba: argmax -> category index
+                # Multi-column proba (assign.py): argmax -> category index
                 cat_ids = np.argmax(arr, axis=1).astype(np.uint8)
                 print(f"  [bin]       {stem}  ({len(classes)} labels)")
             categories.append({"stem": stem, "labels": classes, "data": cat_ids})

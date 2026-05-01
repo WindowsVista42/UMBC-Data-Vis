@@ -1,33 +1,33 @@
 """
 Encode a single numeric recipe field as an ordinal feature for UMAP augmentation.
 
-Three encoding types are supported:
+Encoding types (controls how value maps to a bin):
 
-  bins      - Hard binning using explicit edge boundaries. A value falls
-              entirely into one bin. Output: single float in [0, 1] where
-              0 = first bin and 1 = last bin. Config requires "edges"
-              (N-1 split points) and "labels" (N bin names). Values below
-              the first edge go to bin 0; above the last edge to the last bin.
+  bins      - Hard binning using explicit edge boundaries. Config requires
+              "edges" (N-1 split points) and "labels" (N bin names).
+              Values below the first edge go to bin 0; above the last to last bin.
 
-  soft_bins - Soft binning with linear interpolation between bin centers.
-              Output: single float in [0, 1] computed as the weighted average
-              of normalized bin positions. A value halfway between bin 2 and
-              bin 3 of 5 gets 0.5 * (2/4) + 0.5 * (3/4) = 0.625. Config
-              requires "centers" and "labels" of equal length.
+  normalize - Min-max normalization to [0, 1] using actual data range.
+              Good for continuous values like dates.
 
-  normalize - Min-max normalization to [0, 1] using the actual data range.
-              Good for continuous values like dates where explicit bin
-              placement would be arbitrary.
+Output formats (controls shape of feature vector):
 
-All types output a single float column per recipe. bins and soft_bins also
-output a per-recipe category JSON with the winning label.
+  rank_hot  - N columns. Cumulative encoding: col i = 1 if value >= bin i,
+              0 if below, fractional if at the boundary. Preserves ordinality
+              — adjacent bins are always closer than distant bins.
+              Default for bins.
+
+  scalar    - 1 column. Single float in [0, 1] representing bin position.
+
+Missing value handling:
+
+  {"type": "value",   "value": N}          - treat missing as N
+  {"type": "one_hot", "label": "..."}      - add orthogonal missing column,
+                                             prepend label at index 0
 
 Output filenames are derived from the config filename:
   n_steps.json   -> artifacts/recipes_n_steps_features.npy
   submitted.json -> artifacts/recipes_submitted_features.npy
-
-By default reads field values from RAW_recipes.jsonl. Use --contrib to read
-from a recipe_contrib_*.json.gz file instead (e.g. for avg_rating, n_ratings).
 
 Usage:
     uv run pipeline/encode_ordinal.py pipeline/configs/n_steps.json
@@ -83,38 +83,47 @@ def extract_value(recipe, field):
         return None
 
 
-def hard_bin_position(value, edges):
-    """Return normalized bin position in [0, 1] using hard boundaries."""
+def rank_hot_encode(value, edges):
+    """Cumulative rank-hot encoding. Returns N-length vector where col i is 1 if value
+    >= bin i, 0 if below, and fractional at the boundary between bins."""
     n = len(edges) + 1
-    idx = n - 1
+    vec = np.zeros(n, dtype=np.float32)
+    for i in range(n):
+        if i == 0:
+            lo = -np.inf
+            hi = edges[0]
+        elif i == n - 1:
+            lo = edges[-1]
+            hi = np.inf
+        else:
+            lo = edges[i - 1]
+            hi = edges[i]
 
-    if value <= edges[0]:
-        return 0.0
-    if value >= edges[-1]:
-        return 1.0
-    for i in range(n - 1):
-        if edges[i] < value <= edges[i + 1]:
-            t = (value - edges[i]) / (edges[i + 1] - edges[i])
-            pos_lo = i / (n - 1)
-            pos_hi = (i + 1) / (n - 1)
-            return pos_lo + t * (pos_hi - pos_lo)
-    return 0.5
+        if value >= hi:
+            vec[i] = 1.0
+        elif value < lo:
+            vec[i] = 0.0
+        else:
+            # fractional position within this bin
+            if np.isinf(lo):
+                vec[i] = 1.0
+            elif np.isinf(hi):
+                vec[i] = 1.0
+            else:
+                vec[i] = (value - lo) / (hi - lo)
+    return vec
 
 
-def soft_bin_position(value, centers):
-    """Return normalized bin position in [0, 1] as a soft-interpolated weighted average."""
-    n = len(centers)
-    if value <= centers[0]:
-        return 0.0
-    if value >= centers[-1]:
-        return 1.0
-    for i in range(n - 1):
-        if centers[i] <= value <= centers[i + 1]:
-            t = (value - centers[i]) / (centers[i + 1] - centers[i])
-            pos_lo = i / (n - 1)
-            pos_hi = (i + 1) / (n - 1)
-            return pos_lo + t * (pos_hi - pos_lo)
-    return 0.5
+def hard_bin_index(value, edges):
+    return next((i for i, e in enumerate(edges) if value < e), len(edges))
+
+
+def hard_bin_position(value, edges):
+    """Single float [0,1] for scalar output."""
+    n = len(edges) + 1
+    idx = hard_bin_index(value, edges)
+    return idx / (n - 1)
+
 
 
 def main():
@@ -128,8 +137,9 @@ def main():
     with open(args.config, encoding="utf-8") as f:
         config = json.load(f)
 
-    field      = config["field"]
-    kind       = config.get("type", "bins")
+    field       = config["field"]
+    kind        = config.get("type", "bins")
+    output_fmt  = config.get("output", "rank_hot" if kind == "bins" else "scalar")
     missing_cfg = config.get("missing_value", None)
 
     if missing_cfg is None:
@@ -145,7 +155,7 @@ def main():
         missing_val     = missing_cfg["value"]
         missing_label   = None
     else:
-        print(f"ERROR: missing_value must be {{\"type\": \"one_hot\", \"label\": \"...\"}} or {{\"type\": \"value\", \"value\": N}}")
+        print("ERROR: missing_value must be {\"type\": \"one_hot\", \"label\": \"...\"} or {\"type\": \"value\", \"value\": N}")
         sys.exit(1)
 
     if kind == "bins":
@@ -154,36 +164,32 @@ def main():
         assert len(labels) == len(edges) + 1, "labels must have exactly len(edges)+1 entries"
         if one_hot_missing:
             labels = [missing_label] + labels
-        print(f"Field '{field}': {len(labels)} hard bins -> single normalized value")
+        print(f"Field '{field}': {len(config['labels'])} hard bins  output={output_fmt}")
         if one_hot_missing:
-            print(f"  [missing]         '{missing_label}'")
+            print(f"  [missing]  '{missing_label}'")
         for i, label in enumerate(config["labels"]):
             lo = f"{edges[i-1]}" if i > 0 else "-inf"
             hi = f"{edges[i]}"   if i < len(edges) else "+inf"
             print(f"  [{lo}, {hi})  '{label}'")
-    elif kind == "soft_bins":
-        centers = config["centers"]
-        labels  = config["labels"]
-        assert len(centers) == len(labels), "centers and labels must have the same length"
-        if one_hot_missing:
-            labels = [missing_label] + labels
-        print(f"Field '{field}': {len(labels)} soft bins -> single normalized value")
-        if one_hot_missing:
-            print(f"  [missing]         '{missing_label}'")
-        for label, center in zip(config["labels"], centers):
-            print(f"  center={center:<6}  '{label}'")
     elif kind == "normalize":
+        output_fmt = "scalar"
         labels = [config["label"]]
-        print(f"Field '{field}': min-max normalize -> '{labels[0]}'")
+        print(f"Field '{field}': normalize -> '{labels[0]}'")
     else:
-        print(f"ERROR: Unknown type '{kind}'. Expected: bins, soft_bins, normalize")
+        print(f"ERROR: Unknown type '{kind}'. Expected: bins, normalize")
         sys.exit(1)
 
     with open(args.index, encoding="utf-8") as f:
         index = json.load(f)
     id_to_idx = {entry["id"]: entry["index"] for entry in index}
 
-    n_cols      = 2 if one_hot_missing else 1
+    # Determine feature columns
+    n_data_bins = len(config.get("labels", [config.get("label")]))
+    if output_fmt == "rank_hot":
+        n_cols = n_data_bins + (1 if one_hot_missing else 0)
+    else:
+        n_cols = 1 + (1 if one_hot_missing else 0)
+
     features    = np.zeros((len(index), n_cols), dtype=np.float32)
     bin_indices = np.zeros(len(index), dtype=np.int32)
 
@@ -222,11 +228,11 @@ def main():
 
     def encode_row(row, val):
         nonlocal missing
+        missing_col = n_data_bins if output_fmt == "rank_hot" else 1
         if val is None:
             if one_hot_missing:
-                features[row, 0] = 0.0
-                features[row, 1] = 1.0
-                # bin_indices[row] stays 0 = missing_label (prepended)
+                features[row, missing_col] = 1.0
+                # bin_indices[row] = 0 = missing_label
                 missing += 1
                 return
             elif missing_val is not None:
@@ -235,15 +241,15 @@ def main():
                 features[row, 0] = 0.5
                 missing += 1
                 return
+
         offset = 1 if one_hot_missing else 0
         if kind == "bins":
-            idx = next((i for i, e in enumerate(edges) if val < e), len(edges))
-            bin_indices[row]  = idx + offset
-            features[row, 0]  = hard_bin_position(val, edges)
-        elif kind == "soft_bins":
-            idx = min(range(len(centers)), key=lambda i: abs(centers[i] - val))
-            bin_indices[row]  = idx + offset
-            features[row, 0]  = soft_bin_position(val, centers)
+            idx = hard_bin_index(val, edges)
+            bin_indices[row] = idx + offset
+            if output_fmt == "rank_hot":
+                features[row, :n_data_bins] = rank_hot_encode(val, edges)
+            else:
+                features[row, 0] = hard_bin_position(val, edges)
         else:
             features[row, 0] = (val - vmin) / (vmax - vmin) if vmax > vmin else 0.5
 
@@ -275,17 +281,15 @@ def main():
     if missing:
         print(f"  {missing:,} recipes had missing values")
 
-    if kind in ("bins", "soft_bins"):
-        n_bins = len(labels)
+    if kind == "bins":
         results = []
         for entry in index:
             row     = entry["index"]
-            val     = float(features[row, 0])
             bin_idx = int(bin_indices[row])
             results.append({
                 "id":       entry["id"],
                 "category": labels[bin_idx],
-                "score":    round(val, 4),
+                "score":    round(float(features[row, 0]), 4),
                 "runners_up": [],
             })
         with open(json_out, "w", encoding="utf-8") as f:

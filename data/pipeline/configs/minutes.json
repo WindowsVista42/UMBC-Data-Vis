@@ -1,6 +1,7 @@
 {
   "field": "minutes",
   "type": "bins",
+  "output": "rank_hot",
   "edges": [
     15,
     30,

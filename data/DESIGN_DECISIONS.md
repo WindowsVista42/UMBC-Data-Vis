@@ -131,7 +131,7 @@ This means `preview.py` only needs to know about one format regardless of how th
 
 ## Cook time: numeric minutes over tag-based bins
 
-Initially cook time was encoded via `tag_encode.py` using tags like `15-minutes-or-less`. This was replaced with `numeric_encode.py` using the raw `minutes` field with soft bins. The raw numeric value is more precise and doesn't depend on whether the recipe contributor remembered to add the tag. Outliers (e.g. multi-day fermentation recipes claiming 4000+ minutes) are handled naturally by soft binning — they all get full weight on the last bin.
+Initially cook time was encoded via `tag_encode.py` using tags like `15-minutes-or-less`. This was replaced with `encode_ordinal.py` using the raw `minutes` field with hard bins and rank-hot output. The raw numeric value is more precise and doesn't depend on whether the recipe contributor remembered to add the tag. Outliers (e.g. multi-day fermentation recipes claiming 4000+ minutes) are handled naturally — they get full weight on the last bin.
 
 ---
 

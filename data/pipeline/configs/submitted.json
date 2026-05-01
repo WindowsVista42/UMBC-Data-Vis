@@ -1,6 +1,7 @@
 {
   "field": "submitted",
   "type": "bins",
+  "output": "scalar",
   "edges": [
     2000,
     2001,

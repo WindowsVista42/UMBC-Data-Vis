@@ -1,6 +1,7 @@
 {
   "field": "n_steps",
   "type": "bins",
+  "output": "rank_hot",
   "edges": [
     6,
     11,

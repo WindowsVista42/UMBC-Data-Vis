@@ -1,6 +1,7 @@
 {
   "field": "n_ingredients",
   "type": "bins",
+  "output": "rank_hot",
   "edges": [
     5,
     10,

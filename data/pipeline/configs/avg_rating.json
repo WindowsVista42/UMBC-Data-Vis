@@ -1,24 +1,8 @@
 {
   "field": "avg_rating",
   "type": "bins",
-  "edges": [
-    0.5,
-    2,
-    3,
-    4,
-    4.5,
-    4.8,
-    4.9999
-  ],
-  "labels": [
-    "no rating",
-    "1 star",
-    "2 stars",
-    "3 stars",
-    "4 stars",
-    "4.5 stars",
-    "4.8 stars",
-    "5 stars"
-  ],
-  "missing_value": 0
+  "output": "rank_hot",
+  "edges": [2, 3, 4, 4.5, 4.8, 4.9999],
+  "labels": ["1 star", "2 stars", "3 stars", "4 stars", "4.5 stars", "4.8 stars", "5 stars"],
+  "missing_value": {"type": "one_hot", "label": "no rating"}
 }
