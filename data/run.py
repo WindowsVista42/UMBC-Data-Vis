@@ -14,6 +14,7 @@ Steps (in order):
     assign    - classify by each category file listed in config.json
     ratings   - compute per-recipe rating aggregates
     encode    - encode numeric/tag features listed in config.json
+    metrics   - generate per-recipe and per-category metric JSON files
     project   - UMAP projection
     export    - package for web app and copy to site/data/
 """
@@ -27,7 +28,7 @@ import sys
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_CONFIG = os.path.join(SCRIPT_DIR, "config.json")
 
-STEPS = ["download", "embed", "assign", "ratings", "encode", "project", "export"]
+STEPS = ["download", "embed", "assign", "ratings", "encode", "metrics", "project", "export"]
 
 
 def run(cmd):
@@ -106,6 +107,9 @@ def main():
             if "contrib" in step:
                 cmd += ["--contrib", step["contrib"]]
             run(cmd)
+
+    if active("metrics"):
+        run(uv("pipeline/metrics.py"))
 
     if active("project"):
         run(uv("pipeline/project.py", "--weights", projection_weights))
