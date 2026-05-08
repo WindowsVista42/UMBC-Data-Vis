@@ -1,18 +1,28 @@
 # Food.com Recipe Explorer
 
-Interactive 3D visualization of 230k recipes from Food.com, projected into embedding space using sentence transformers and UMAP.
+An interactive 3D visualization of ~230K Food.com recipes where proximity reflects semantic similarity. Recipes are embedded with a sentence transformer, classified into categories via k-NN, and combined with numeric features before being projected into 3D with UMAP. The website takes this data and renders it as a navigable 3D point cloud, with category-based coloring and filtering, on-hover recipe details, and per-recipe breakdowns drawn from the ~1.1M user interactions.
 
-Live versions: [Alpha](https://windowsvista42.github.io/recipe_vis) | [Beta](https://windowsvista42.github.io/recipe_vis2/)
+**Live versions:** [Alpha](https://windowsvista42.github.io/recipe_vis) | [Beta](https://windowsvista42.github.io/recipe_vis2/)
+
+## Dataset
+
+[Food.com Recipes and User Interactions](https://www.kaggle.com/datasets/shuyangli94/food-com-recipes-and-user-interactions)
+
+## How it works
+
+[Read it here](HOW_IT_WORKS.md)
 
 ## Project structure
 
 ```
-site/        Three.js web app, loads pre-built data from site/data/
-data/        Pipeline: downloads dataset, builds embeddings, exports to site/data/
-  pipeline/  Per-step scripts (embed, assign, project, export, etc.)
-  raw/       Downloaded dataset files (gitignored)
-  export/    Pipeline output before copying to site/data/ (gitignored)
-_old/        Previous iterations (archived)
+site/          Three.js web app, loads pre-built data from site/data/
+data/          Data processing pipeline
+  pipeline/    Per-step scripts (embed, assign, ratings, encode, metrics, project, export)
+    configs/   Hand-authored config files (tracked by git)
+  artifacts/   All generated intermediate outputs (gitignored)
+  export/      Final web app package before copying to site/data/ (gitignored)
+  raw/         Downloaded dataset files (gitignored)
+_old/          Previous iterations (archived)
 ```
 
 ## Running locally
@@ -25,12 +35,8 @@ uv run python -m http.server 8080
 
 Open `http://localhost:8080`. `site/data/` must be populated first. Either run the pipeline or copy an existing export into it.
 
-## Data pipeline
+## Reproducing the data / running the pipeline
 
-See [`data/README.md`](data/README.md) for full documentation: pipeline steps, config files, and how to add new categories or features.
+If you want to regenerate the data yourself, see **[`data/README.md`](data/README.md)**. It covers prerequisites (uv, platform-specific PyTorch), all pipeline steps in order, and how to add new categories or features.
 
-From [`data/`](data/), `uv run run.py` runs all steps end-to-end and copies output to `site/data/`.
-
-## Dataset
-
-The pipeline downloads [Food.com Recipes and User Interactions](https://www.kaggle.com/datasets/shuyangli94/food-com-recipes-and-user-interactions) from Kaggle automatically via the `download` step.
+**The short version:** from [`data/`](data/) run `uv run run.py` to run all steps and copy output to `site/data/`.
