@@ -1,5 +1,4 @@
-# macOS / CPU-only configuration.
-# This project is intended to run without CUDA or GPU-specific dependencies.
+#original pyproject.toml file with gpu + windows + cuda configurations 
 
 [project]
 name = "data"
@@ -14,14 +13,19 @@ dependencies = [
     "plotly>=6.7.0",
     "pymorton>=1.0.5",
     "sentence-transformers",
-
-    # CPU-only PyTorch wheel for macOS and no-GPU setups.
     "torch",
     "umap-learn",
 ]
 
 [tool.uv]
 index-strategy = "unsafe-best-match"
+
+[tool.uv.sources]
+torch = { index = "pytorch" }
+
+[[tool.uv.index]]
+url = "https://download.pytorch.org/whl/cu121"
+name = "pytorch"
 
 [[tool.uv.index]]
 url = "https://pypi.org/simple"
