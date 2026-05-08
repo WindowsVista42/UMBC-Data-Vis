@@ -39,10 +39,7 @@
 
     <!-- Story mode -->
     <div id="story-panel">
-      <div id="story-content">
-        <h2 id="story-title"></h2>
-        <p id="story-subtitle"></p>
-      </div>
+      <div id="story-content"></div>
       <div id="story-nav">
         <button class="nav-btn" id="btn-prev">&#8592; Prev</button>
         <span id="story-counter"></span>
@@ -121,6 +118,14 @@
     </label>
   </div>
 
+  <!-- ── Chart panel ── -->
+  <div id="chart-panel">
+    <div id="chart-panel-header">
+      <span id="chart-panel-title"></span>
+    </div>
+    <div id="chart-panel-body"></div>
+  </div>
+
   <!-- ── Display widget ── -->
   <div id="display-widget">
     <span class="sw-label">Point Size</span>
@@ -128,6 +133,7 @@
     <span class="sw-val" id="fc-size-val">1×</span>
   </div>
 
+  <script src="https://d3js.org/d3.v7.min.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

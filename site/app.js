@@ -838,6 +838,239 @@ function showClusterInfo(labelIdx) {
   document.getElementById('cluster-count').textContent = `${count.toLocaleString()} recipes`;
 }
 
+// ── Chart panel ───────────────────────────────────────────────────────────────
+function showChartPanel(config, data) {
+  document.getElementById('chart-panel-title').textContent = config.title || '';
+  const body = document.getElementById('chart-panel-body');
+  body.innerHTML = '';
+  document.getElementById('chart-panel').classList.add('open');
+  requestAnimationFrame(() => renderChart(body, config, data));
+}
+
+function hideChartPanel() {
+  document.getElementById('chart-panel').classList.remove('open');
+  document.getElementById('chart-panel-body').innerHTML = '';
+}
+
+async function loadAndRenderChart(config, container) {
+  const panelMode = container === null;
+  let target = container;
+  if (panelMode) {
+    document.getElementById('chart-panel-title').textContent = config.title || '';
+    document.getElementById('chart-panel').classList.add('open');
+    target = document.getElementById('chart-panel-body');
+    target.innerHTML = '';
+  }
+  try {
+    const resp = await fetch(config.dataFile);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const fileData = await resp.json();
+    // story.json block fields override data file defaults
+    const merged = { ...fileData, ...config };
+    // Resolve palette colors for pre-binned histograms
+    if (merged.labels && merged.counts && config.categoryFamily && meta) {
+      const fam = meta.categories.find(c => c.name === config.categoryFamily);
+      if (fam) {
+        merged.colors = merged.labels.map(lbl => {
+          const li = fam.labels.indexOf(lbl);
+          if (li < 0) return '#4e79a7';
+          const [r, g, b] = getPaletteRgb(li);
+          return `rgb(${r},${g},${b})`;
+        });
+      }
+    }
+    renderChart(target, merged, fileData.data);
+  } catch (e) {
+    if (panelMode) hideChartPanel();
+    console.warn('Chart load failed:', e);
+  }
+}
+
+function renderChart(container, config, data) {
+  const type = config.chartType;
+  const isBinned = !!(config.labels && config.counts);
+  if (!type || (!data?.length && !isBinned)) return;
+
+  const W = container.clientWidth > 10 ? container.clientWidth : 266;
+  const isInline = config.placement === 'inline';
+  const H = isInline ? 130 : 190;
+  const margin = type === 'beeswarm'
+    ? { top: 8, right: 10, bottom: 26, left: 10 }
+    : isBinned
+    ? { top: 22, right: 10, bottom: 52, left: 36 }
+    : { top: 8, right: 10, bottom: 26, left: 34 };
+  const innerW = W - margin.left - margin.right;
+  const innerH = H - margin.top - margin.bottom;
+
+  const AXIS_COLOR = 'rgba(255,255,255,0.25)';
+  const BAR_COLOR  = '#4e79a7';
+  const TEXT_COLOR = 'rgba(255,255,255,0.72)';
+
+  container.innerHTML = '';
+  const svg = d3.select(container)
+    .append('svg')
+    .attr('width', W).attr('height', H)
+    .style('display', 'block');
+
+  const g = svg.append('g')
+    .attr('transform', `translate(${margin.left},${margin.top})`);
+
+  const styleAxis = ax => ax
+    .call(a => a.select('.domain').attr('stroke', AXIS_COLOR))
+    .call(a => a.selectAll('.tick line').attr('stroke', AXIS_COLOR))
+    .call(a => a.selectAll('text').attr('fill', TEXT_COLOR).attr('font-size', '11px'));
+
+  if (type === 'histogram') {
+    if (isBinned) {
+      const labels = config.labels;
+      const counts = config.counts;
+      const x = d3.scaleBand().domain(labels).range([0, innerW]).padding(0.12);
+      const yMax = config.yMax ?? d3.max(counts);
+      const y = d3.scaleLinear().domain([0, yMax]).range([innerH, 0]);
+
+      g.append('g').attr('transform', `translate(0,${innerH})`)
+        .call(d3.axisBottom(x).tickSizeOuter(0))
+        .call(ax => {
+          ax.select('.domain').attr('stroke', AXIS_COLOR);
+          ax.selectAll('.tick line').attr('stroke', AXIS_COLOR);
+          ax.selectAll('text')
+            .attr('fill', TEXT_COLOR).attr('font-size', '11px')
+            .attr('transform', 'rotate(-40)')
+            .attr('text-anchor', 'end')
+            .attr('dx', '-0.4em').attr('dy', '0.15em');
+        });
+      styleAxis(g.append('g').call(d3.axisLeft(y).ticks(4).tickFormat(d3.format('.2s'))));
+
+      g.selectAll('rect').data(counts).join('rect')
+        .attr('x', (_, i) => x(labels[i]))
+        .attr('width', x.bandwidth())
+        .attr('y', d => y(d))
+        .attr('height', d => innerH - y(d))
+        .attr('fill', (_, i) => config.colors?.[i] ?? BAR_COLOR)
+        .attr('opacity', 0.88);
+
+    } else {
+      const xMin = config.xMin ?? d3.min(data);
+      const xMax = config.xMax ?? d3.max(data);
+      const x = d3.scaleLinear().domain([xMin, xMax]).range([0, innerW]);
+      const bins = d3.bin().domain([xMin, xMax]).thresholds(config.bins ?? 20)(data);
+      const yMax = config.yMax ?? d3.max(bins, b => b.length);
+      const y = d3.scaleLinear().domain([0, yMax]).range([innerH, 0]);
+
+      styleAxis(g.append('g').attr('transform', `translate(0,${innerH})`).call(d3.axisBottom(x).ticks(5)));
+      styleAxis(g.append('g').call(d3.axisLeft(y).ticks(4)));
+
+      g.selectAll('rect').data(bins).join('rect')
+        .attr('x', b => x(b.x0) + 1)
+        .attr('width', b => Math.max(0, x(b.x1) - x(b.x0) - 1))
+        .attr('y', b => y(b.length))
+        .attr('height', b => innerH - y(b.length))
+        .attr('fill', BAR_COLOR).attr('opacity', 0.75);
+    }
+
+    if (config.yLabel) {
+      svg.append('text')
+        .attr('x', margin.left)
+        .attr('y', margin.top - 7)
+        .attr('fill', TEXT_COLOR)
+        .attr('font-size', '11px')
+        .attr('text-anchor', 'start')
+        .text('↑ ' + config.yLabel);
+    }
+
+  } else if (type === 'beeswarm') {
+    const xMin = config.xMin ?? d3.min(data);
+    const xMax = config.xMax ?? d3.max(data);
+    const x = d3.scaleLinear().domain([xMin, xMax]).range([0, innerW]);
+    const r = config.radius ?? 3;
+    const midY = innerH / 2;
+
+    styleAxis(g.append('g').attr('transform', `translate(0,${innerH})`).call(d3.axisBottom(x).ticks(5)));
+
+    const sample = data.length > 600
+      ? Array.from({ length: 600 }, (_, i) => data[Math.floor(i * data.length / 600)])
+      : data;
+    const nodes = sample.map(v => ({ tx: x(v), x: x(v), y: midY }));
+    const sim = d3.forceSimulation(nodes)
+      .force('x', d3.forceX(d => d.tx).strength(0.9))
+      .force('y', d3.forceY(midY).strength(0.05))
+      .force('collide', d3.forceCollide(r + 0.8))
+      .stop();
+    for (let i = 0; i < 150; i++) sim.tick();
+
+    g.selectAll('circle').data(nodes).join('circle')
+      .attr('cx', d => Math.max(r, Math.min(innerW - r, d.x)))
+      .attr('cy', d => Math.max(r, Math.min(innerH - r, d.y)))
+      .attr('r', r)
+      .attr('fill', BAR_COLOR).attr('opacity', 0.60);
+
+  } else if (type === 'line') {
+    const xVals = data.map(d => d[0]);
+    const yVals = data.map(d => d[1]);
+    const x = d3.scaleLinear()
+      .domain([config.xMin ?? d3.min(xVals), config.xMax ?? d3.max(xVals)])
+      .range([0, innerW]);
+    const y = d3.scaleLinear()
+      .domain([config.yMin ?? d3.min(yVals), config.yMax ?? d3.max(yVals)])
+      .range([innerH, 0]);
+
+    styleAxis(g.append('g').attr('transform', `translate(0,${innerH})`).call(d3.axisBottom(x).ticks(5)));
+    styleAxis(g.append('g').call(d3.axisLeft(y).ticks(4)));
+
+    g.append('path').datum(data)
+      .attr('fill', 'none').attr('stroke', BAR_COLOR).attr('stroke-width', 1.5)
+      .attr('d', d3.line().x(d => x(d[0])).y(d => y(d[1])));
+
+    if (config.yLabel) {
+      svg.append('text')
+        .attr('x', margin.left)
+        .attr('y', margin.top - 7)
+        .attr('fill', TEXT_COLOR)
+        .attr('font-size', '11px')
+        .attr('text-anchor', 'start')
+        .text('↑ ' + config.yLabel);
+    }
+
+  } else if (type === 'scatter') {
+    const xVals = data.map(d => d[0]);
+    const yVals = data.map(d => d[1]);
+    const x = d3.scaleLinear()
+      .domain([config.xMin ?? d3.min(xVals), config.xMax ?? d3.max(xVals)])
+      .range([0, innerW]);
+    const y = d3.scaleLinear()
+      .domain([config.yMin ?? d3.min(yVals), config.yMax ?? d3.max(yVals)])
+      .range([innerH, 0]);
+
+    styleAxis(g.append('g').attr('transform', `translate(0,${innerH})`).call(d3.axisBottom(x).ticks(5)));
+    styleAxis(g.append('g').call(d3.axisLeft(y).ticks(4)));
+
+    g.selectAll('circle').data(data).join('circle')
+      .attr('cx', d => x(d[0])).attr('cy', d => y(d[1]))
+      .attr('r', 2.5).attr('fill', BAR_COLOR).attr('opacity', 0.55);
+
+    if (config.yLabel) {
+      svg.append('text')
+        .attr('x', margin.left)
+        .attr('y', margin.top - 7)
+        .attr('fill', TEXT_COLOR)
+        .attr('font-size', '11px')
+        .attr('text-anchor', 'start')
+        .text('↑ ' + config.yLabel);
+    }
+  }
+
+  if (config.xLabel) {
+    svg.append('text')
+      .attr('x', margin.left + innerW / 2).attr('y', H - 2)
+      .attr('text-anchor', 'middle').attr('fill', TEXT_COLOR).attr('font-size', '11px')
+      .text(config.xLabel);
+  }
+}
+
+// ── Explore chart stubs (Phase 2) ─────────────────────────────────────────────
+function showRecipeChart(recipeId) { /* TODO Phase 2 */ }
+function showClusterChart(clusterId) { /* TODO Phase 2 */ }
+
 // ── Left panel: story mode ────────────────────────────────────────────────────
 function applyStep(step) {
   // Switch category family
@@ -870,10 +1103,41 @@ function applyStep(step) {
   if (step.camera) {
     animateCameraToPosition(step.camera.position, step.camera.target);
   }
-  // Update panel text
-  document.getElementById('story-title').textContent    = step.title    || '';
-  document.getElementById('story-subtitle').textContent = step.subtitle || '';
-  document.getElementById('story-counter').textContent  =
+  // Render content blocks
+  const contentEl = document.getElementById('story-content');
+  contentEl.innerHTML = '';
+  let panelChartBlock = null;
+
+  for (const block of step.content ?? []) {
+    if (block.type === 'text') {
+      const el = document.createElement('p');
+      el.className = `story-${block.style || 'body'}`;
+      el.textContent = block.value || '';
+      contentEl.appendChild(el);
+    } else if (block.type === 'description') {
+      const el = document.createElement('p');
+      el.className = 'story-description';
+      el.textContent = block.value || '';
+      contentEl.appendChild(el);
+    } else if (block.type === 'chart') {
+      if (block.placement === 'inline') {
+        const wrap = document.createElement('div');
+        wrap.className = 'story-chart-inline';
+        contentEl.appendChild(wrap);
+        loadAndRenderChart(block, wrap);
+      } else {
+        panelChartBlock = block;
+      }
+    }
+  }
+
+  if (panelChartBlock) {
+    loadAndRenderChart(panelChartBlock, null);
+  } else {
+    hideChartPanel();
+  }
+
+  document.getElementById('story-counter').textContent =
     `${currentStep + 1} / ${storyData.steps.length}`;
 
   document.getElementById('btn-prev').disabled = currentStep === 0;
@@ -906,6 +1170,7 @@ function setMode(mode) {
     showExploreDefault();
     lockedIdx = -1;
     hideHoverTip();
+    hideChartPanel();
   } else {
     applyStep(storyData.steps[currentStep]);
   }
@@ -1088,6 +1353,7 @@ async function boot() {
     if (!sharePopup.contains(e.target) && e.target !== document.getElementById('btn-share'))
       sharePopup.classList.remove('open');
   });
+
 
   // Story mode default
   initStoryPanel();

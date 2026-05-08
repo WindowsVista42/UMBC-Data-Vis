@@ -11,3 +11,5 @@ __pycache__
 !pipeline/configs/*.txt
 artifacts/
 export/
+.DS_Store
+*.log

@@ -317,6 +317,16 @@ def main():
         if os.path.exists(site_data):
             shutil.rmtree(site_data)
         shutil.copytree(out_dir, site_data)
+
+        for metrics_dir in ["recipe_metrics", "category_metrics"]:
+            src = os.path.join(ARTIFACTS_DIR, metrics_dir)
+            dst = os.path.join(site_data, metrics_dir)
+            if os.path.exists(src):
+                shutil.copytree(src, dst)
+                print(f"  Copied {metrics_dir}/")
+            else:
+                print(f"  Warning: {metrics_dir}/ not found in artifacts, skipping")
+
         print(f"  Done.")
 
 
