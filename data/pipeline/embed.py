@@ -38,7 +38,7 @@ def parse_args():
     parser.add_argument("--input", default=DEFAULT_INPUT, help="Path to RAW_recipes.jsonl")
     parser.add_argument("--config", default=DEFAULT_CONFIG, help="Path to embed_config.json")
     parser.add_argument("--output-prefix", default=DEFAULT_OUTPUT_PREFIX, help="Prefix for output files")
-    parser.add_argument("--batch-size", type=int, default=64, help="Encoding batch size (default: 64)")
+    parser.add_argument("--batch-size", type=int, default=256, help="Encoding batch size (default: 256)")
     parser.add_argument("--max-rows", type=int, default=None, help="Process at most N recipes (for testing)")
     return parser.parse_args()
 
