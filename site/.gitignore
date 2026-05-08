@@ -1,1 +1,14 @@
 data/**
+# *.csv
+# *.jsonl
+# *.npy
+# *.pkl
+# *.json
+# !config.json
+# !pipeline/configs/*.json
+# __pycache__
+# *.html
+# *.txt
+# !pipeline/configs/*.txt
+# artifacts/
+# export/
