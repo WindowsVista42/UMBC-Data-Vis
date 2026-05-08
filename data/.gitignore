@@ -12,3 +12,4 @@ __pycache__
 artifacts/
 export/
 .DS_Store
+*.log
