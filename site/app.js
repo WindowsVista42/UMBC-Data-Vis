@@ -81,6 +81,10 @@ let alphaCache = null;      // Float32Array(N) — 0=hidden, 1=visible (for rayc
 const chunkCache   = new Map(); // chunkId -> {recipe_id_str: {...}}
 const pendingChunks = new Map(); // chunkId -> Promise<data> (in-flight fetches)
 
+const recipeMetricsCache   = new Map(); // shard -> {rid_str: metrics | {}}
+const categoryMetricsCache = new Map(); // filename -> data
+let   categoryMetricsIndex = null;      // {family: {label: filename}}
+
 let renderer, scene, camera, controls;
 let geometry, pointsMesh;
 let uniforms = {};
@@ -763,12 +767,16 @@ function showExploreDefault() {
   document.getElementById('explore-default').style.display = 'block';
   document.getElementById('explore-recipe').style.display  = 'none';
   document.getElementById('explore-cluster').style.display = 'none';
+  hideChartPanel();
 }
 
 function showRecipeInfo(idx) {
   document.getElementById('explore-default').style.display = 'none';
   document.getElementById('explore-recipe').style.display  = 'block';
   document.getElementById('explore-cluster').style.display = 'none';
+
+  hideChartPanel();
+  showRecipeChart(recipeIds[idx]);
 
   // Show placeholder immediately, fill in async
   document.getElementById('recipe-name').textContent = `Recipe #${recipeIds[idx]}`;
@@ -836,6 +844,7 @@ function showClusterInfo(labelIdx) {
   document.getElementById('explore-cluster').style.display = 'block';
   document.getElementById('cluster-name').textContent  = label;
   document.getElementById('cluster-count').textContent = `${count.toLocaleString()} recipes`;
+  showClusterChart(family.name, label);
 }
 
 // ── Chart panel ───────────────────────────────────────────────────────────────
@@ -1067,9 +1076,76 @@ function renderChart(container, config, data) {
   }
 }
 
-// ── Explore chart stubs (Phase 2) ─────────────────────────────────────────────
-function showRecipeChart(recipeId) { /* TODO Phase 2 */ }
-function showClusterChart(clusterId) { /* TODO Phase 2 */ }
+// ── Explore charts ────────────────────────────────────────────────────────────
+async function showRecipeChart(recipeId) {
+  const shard = String(recipeId).slice(-2).padStart(2, '0');
+
+  if (!recipeMetricsCache.has(shard)) {
+    try {
+      const ab   = await fetch(`${DATA}recipe_metrics/${shard}.json.gz`).then(r => r.ok ? r.arrayBuffer() : null);
+      const data = ab ? await decompressJson(ab) : {};
+      recipeMetricsCache.set(shard, data);
+    } catch { recipeMetricsCache.set(shard, {}); }
+  }
+
+  const metrics = recipeMetricsCache.get(shard)?.[String(recipeId)];
+  if (!metrics || !metrics.n_ratings) return;
+
+  // Resolve palette colors: map star labels to avg_rating family indices
+  const avgFam   = meta?.categories.find(c => c.name === 'avg_rating');
+  const idxMap   = { '1 star': 1, '2 stars': 2, '3 stars': 3, '4 stars': 4, '5 stars': 7 };
+  const labels   = ['1 star', '2 stars', '3 stars', '4 stars', '5 stars'];
+  const counts   = [metrics.count_1, metrics.count_2, metrics.count_3, metrics.count_4, metrics.count_5];
+  const colors   = labels.map(lbl => {
+    const li = idxMap[lbl];
+    if (!avgFam || li == null) return '#4e79a7';
+    const [r, g, b] = getPaletteRgb(li);
+    return `rgb(${r},${g},${b})`;
+  });
+
+  const body = document.getElementById('chart-panel-body');
+  body.innerHTML = '';
+  document.getElementById('chart-panel-title').textContent = 'Ratings';
+  document.getElementById('chart-panel').classList.add('open');
+
+  // Google Maps-style stat header
+  const stat = document.createElement('div');
+  stat.className = 'chart-stat-header';
+  stat.innerHTML =
+    `<span class="chart-stat-avg">${metrics.avg_rating?.toFixed(1) ?? '—'}</span>` +
+    `<span class="chart-stat-meta"> · ${metrics.n_ratings.toLocaleString()} rating${metrics.n_ratings !== 1 ? 's' : ''}</span>`;
+  body.appendChild(stat);
+
+  const chartEl = document.createElement('div');
+  body.appendChild(chartEl);
+  requestAnimationFrame(() => renderChart(chartEl, { chartType: 'histogram', labels, counts, colors, yLabel: 'Ratings' }, null));
+}
+
+async function showClusterChart(familyName, label) {
+  if (!categoryMetricsIndex) return;
+
+  const filename = categoryMetricsIndex[familyName]?.[label];
+  if (!filename) return;
+
+  if (!categoryMetricsCache.has(filename)) {
+    try {
+      const ab   = await fetch(`${DATA}category_metrics/${filename}`).then(r => r.ok ? r.arrayBuffer() : null);
+      const data = ab ? await decompressJson(ab) : null;
+      categoryMetricsCache.set(filename, data);
+    } catch { return; }
+  }
+
+  const catData = categoryMetricsCache.get(filename);
+  if (!catData?.reviews_per_year) return;
+
+  const points = Object.entries(catData.reviews_per_year)
+    .map(([y, c]) => [parseInt(y), c])
+    .sort((a, b) => a[0] - b[0]);
+
+  if (!points.length) return;
+
+  showChartPanel({ chartType: 'line', title: 'Reviews per year', xLabel: 'Year', yLabel: 'Reviews' }, points);
+}
 
 // ── Left panel: story mode ────────────────────────────────────────────────────
 function applyStep(step) {
@@ -1231,12 +1307,14 @@ function applyShareState() {
 async function boot() {
   showProgress(0, 'Loading metadata…');
 
-  // Load meta, palette, story in parallel
-  const [metaRes, paletteRes, storyRes] = await Promise.all([
+  // Load meta, palette, story, and category metrics index in parallel
+  const [metaRes, paletteRes, storyRes, catIdxRes] = await Promise.all([
     fetch(`${DATA}meta.json`).then(r => r.json()),
     fetch('palette.json').then(r => r.json()),
     fetch('story.json').then(r => r.json()),
+    fetch(`${DATA}category_metrics/index.json`).then(r => r.json()).catch(() => null),
   ]);
+  categoryMetricsIndex = catIdxRes;
 
   meta      = metaRes;
   storyData = storyRes;
