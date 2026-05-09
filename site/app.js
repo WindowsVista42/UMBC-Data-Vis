@@ -889,6 +889,7 @@ function showExploreDefault() {
   document.getElementById('explore-default').style.display = 'block';
   document.getElementById('explore-recipe').style.display = 'none';
   document.getElementById('explore-cluster').style.display = 'none';
+  document.getElementById('explore-panel-footer').style.display = 'none';
   hideChartPanel();
 }
 
@@ -896,6 +897,8 @@ function showRecipeInfo(idx) {
   document.getElementById('explore-default').style.display = 'none';
   document.getElementById('explore-recipe').style.display = 'block';
   document.getElementById('explore-cluster').style.display = 'none';
+  document.getElementById('cluster-chart-tabs').innerHTML = '';
+  document.getElementById('explore-panel-footer').style.display = 'block';
 
   renderChartTabs('recipe-chart-tabs', RECIPE_TABS, activeRecipeTab, tabId => {
     activeRecipeTab = tabId;
@@ -968,6 +971,8 @@ function showClusterInfo(labelIdx) {
   document.getElementById('explore-default').style.display = 'none';
   document.getElementById('explore-recipe').style.display = 'none';
   document.getElementById('explore-cluster').style.display = 'block';
+  document.getElementById('recipe-chart-tabs').innerHTML = '';
+  document.getElementById('explore-panel-footer').style.display = 'block';
   document.getElementById('cluster-name').textContent = label;
   document.getElementById('cluster-count').textContent = `${count.toLocaleString()} recipes`;
 
@@ -1512,6 +1517,7 @@ function setMode(mode) {
   document.getElementById('btn-explore').classList.toggle('active', mode === 'explore');
   document.getElementById('story-panel').style.display = mode === 'story' ? 'flex' : 'none';
   document.getElementById('explore-panel').style.display = mode === 'explore' ? 'flex' : 'none';
+  document.getElementById('btn-randomize').style.display = mode === 'explore' ? 'block' : 'none';
 
   document.getElementById('right-column').classList.toggle('story-mode', mode === 'story');
 
@@ -1522,7 +1528,11 @@ function setMode(mode) {
     lockedIdx = -1;
     hideHoverTip();
     hideChartPanel();
+    document.getElementById('btn-randomize').textContent = 'Surprise Me';
   } else {
+    lockedIdx = -1;
+    hideHoverTip();
+    restoreIntersectionHighlight();
     applyStep(storyData.steps[currentStep]);
   }
 }
