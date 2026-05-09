@@ -861,6 +861,29 @@ function renderCategoryList() {
 }
 
 // ── Left panel: explore mode ──────────────────────────────────────────────────
+function randomizeRecipe() {
+  if (!N || !posArr) return;
+  const idx = Math.floor(Math.random() * N);
+  lockedIdx = idx;
+
+  const i3   = idx * 3;
+  const pt   = new THREE.Vector3(posArr[i3], posArr[i3 + 1], posArr[i3 + 2]);
+  const dist = dataExtent * 0.25;
+
+  // Camera sits outside the dataset looking inward toward the point
+  let outward = pt.clone().sub(dataCenterVec);
+  if (outward.length() < 0.001) outward.set(0, 0, 1);
+  outward.normalize();
+
+  animateCameraToPosition(
+    [pt.x + outward.x * dist, pt.y + outward.y * dist, pt.z + outward.z * dist],
+    [pt.x, pt.y, pt.z]
+  );
+
+  showHoverTip(idx);
+  showRecipeInfo(idx);
+}
+
 function showExploreDefault() {
   restoreIntersectionHighlight();
   document.getElementById('explore-default').style.display = 'block';
@@ -1639,7 +1662,41 @@ async function boot() {
   initRightPanel();
 
   // Mode buttons
-  document.getElementById('btn-story').addEventListener('click', () => setMode('story'));
+  document.getElementById('btn-story').addEventListener('click',    () => setMode('story'));
+  const RANDOMIZE_LABELS = [
+    'Roll the Dice', 'Spin the Wheel', 'Take a Chance',
+    'Why Not?', 'Just Wing It', 'Mystery Pick', 'Go for It',
+    'Hit Me', 'Keep Going', 'I Trust You', 'Dealer\'s Choice',
+    'Wild Card', 'Leap of Faith', 'Fortune Favors...', 'Pull the Lever',
+    'Close Your Eyes', 'No Peeking', 'Let Fate Decide', 'Next!',
+    'Show Me Something', 'Feeling Adventurous?',
+    // food puns
+    'Chef\'s Choice', 'Recipe Roulette', 'Pot Luck', 'Stir the Pot',
+    'What\'s Cooking?', 'Today\'s Special', 'House Special',
+    'Take a Whisk', 'Feeling Saucy', 'Secret Ingredient',
+    'Catch of the Day', 'Serve It Up', 'On the Menu',
+    'Roll the Dough', 'Just Whisk It', 'Spice It Up',
+    'Heat Things Up', 'Season to Taste', 'Simmer and See',
+    'Bake It Till You Make It', 'Something Smells Good...',
+    'Bring the Heat', 'Toss It Up', 'A Dash of Luck',
+    'Mix It Up', 'Shake It Up', 'Feeling Hungry?', 'From the Vault',
+    'Fork Around and Find Out', 'Lettuce Find One', 'Thyme to Explore',
+    'Dough You Feel Lucky?', 'Roux-lette', 'Leek of Faith',
+    'Braise Yourself', 'Crust Me', 'Turnip the Beet',
+    'Miso Ready', 'Udon Know What You\'ll Get', 'Pasta la Vista',
+    'Shell We?', 'Wanna Taco Bout It?', 'Kale Yeah!',
+    'The Yolk\'s on You', 'Holy Guacamole', 'Nacho Average Pick',
+    'Pour Decisions', 'Oil Be Surprised', 'No Whey!',
+    'Sear-iously?', 'Pho-nomenal Find', 'Something\'s Brewing',
+    'Worth Its Salt', 'Can\'t Beet the Suspense', 'Knead Something New',
+    'Let\'s Get This Bread', 'Going With Your Gut',
+  ];
+  const btnRandomize = document.getElementById('btn-randomize');
+  btnRandomize.addEventListener('click', () => {
+    randomizeRecipe();
+    const available = RANDOMIZE_LABELS.filter(l => l !== btnRandomize.textContent);
+    btnRandomize.textContent = available[Math.floor(Math.random() * available.length)];
+  });
   document.getElementById('btn-explore').addEventListener('click', () => setMode('explore'));
 
   // About modal
