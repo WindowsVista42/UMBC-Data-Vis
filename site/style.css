@@ -1,3 +1,13 @@
+/* ── Layout variables ──────────────────────────────────────────────────── */
+:root {
+  --topbar-h:      44px;
+  --panel-gap:     12px;
+  --panel-w:       clamp(297px, 20vw, 310px);
+  --left-panel-h:  clamp(340px, 33vh, 347px);
+  --right-panel-h: clamp(352px, 44vh, 478px);
+  --chart-panel-w: clamp(418px, 30vw, 478px);
+}
+
 /* ── Reset & base ──────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 button, input, select, textarea { font-family: inherit; letter-spacing: inherit; font-variant-numeric: inherit; }
@@ -17,7 +27,7 @@ html, body {
 #topbar {
   position: fixed;
   top: 0; left: 0; right: 0;
-  height: 44px;
+  height: var(--topbar-h);
   background: rgba(12, 12, 22, 0.97);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
@@ -68,7 +78,7 @@ html, body {
 /* ── Canvas ────────────────────────────────────────────────────────────── */
 #three-canvas {
   position: fixed;
-  top: 44px;
+  top: var(--topbar-h);
   left: 0;
   display: block;
   outline: none;
@@ -77,9 +87,9 @@ html, body {
 /* ── Left panel ────────────────────────────────────────────────────────── */
 #left-panel {
   position: fixed;
-  top: 56px; left: 12px;
-  width: 290px;
-  height: 300px;
+  top: calc(var(--topbar-h) + var(--panel-gap)); left: var(--panel-gap);
+  width: var(--panel-w);
+  height: var(--left-panel-h);
   background: rgba(15, 15, 28, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: 8px;
@@ -189,14 +199,15 @@ html, body {
 }
 
 .explore-hints {
-  margin-top: auto;
+  margin: auto 0;
 }
 
 #btn-randomize {
   display: none;
   position: fixed;
-  top: 364px; left: 12px;
-  width: 290px;
+  top: calc(var(--topbar-h) + var(--panel-gap) + var(--left-panel-h) + 8px);
+  left: var(--panel-gap);
+  width: var(--panel-w);
   font-size: 12px;
   padding: 7px 14px;
   background: rgba(15, 15, 28, 0.88);
@@ -312,8 +323,7 @@ html, body {
 
 /* ── Right panel ───────────────────────────────────────────────────────── */
 #right-panel {
-  /* flex: 1; */
-  height: 400px;
+  height: var(--right-panel-h);
   min-height: 0;
   background: rgba(15, 15, 28, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.10);
@@ -397,8 +407,10 @@ html, body {
 /* ── Right column ──────────────────────────────────────────────────────── */
 #right-column {
   position: fixed;
-  top: 56px; right: 12px; bottom: 12px;
-  width: 290px;
+  top: calc(var(--topbar-h) + var(--panel-gap));
+  right: var(--panel-gap);
+  bottom: var(--panel-gap);
+  width: var(--panel-w);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -409,9 +421,9 @@ html, body {
 /* ── Share popup ───────────────────────────────────────────────────────── */
 #share-popup {
   position: fixed;
-  top: 52px;
-  right: 12px;
-  width: 300px;
+  top: calc(var(--topbar-h) + 8px);
+  right: var(--panel-gap);
+  width: clamp(260px, 22vw, 340px);
   background: rgba(22, 22, 36, 0.98);
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 8px;
@@ -635,8 +647,8 @@ html, body {
 /* ── Chart panel ───────────────────────────────────────────────────────── */
 #chart-panel {
   position: fixed;
-  bottom: 12px; left: 12px;
-  width: 440px;
+  bottom: var(--panel-gap); left: var(--panel-gap);
+  width: var(--chart-panel-w);
   background: rgba(15, 15, 28, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: 8px;

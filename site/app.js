@@ -6,7 +6,7 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 const DATA = 'data/';
 const LEFT_W = 0;
 const RIGHT_W = 0;
-const TOPBAR_H = 44;
+const TOPBAR_H = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--topbar-h')) || 44;
 const CAT_TEX_W = 4096;   // texture width for category data buffer
 const MAX_LABELS = 64;     // max labels per category family for uniform arrays
 const DRAG_THRESH = 5;
