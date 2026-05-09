@@ -106,6 +106,9 @@ let highlightLabelSet = null;
 
 let savedIntersectionState = null; // {activeFam, modes[]} saved before intersection hover
 
+const REVIEWS_YEAR_MIN = 1999;
+const REVIEWS_YEAR_MAX = 2018;
+
 const RECIPE_TABS = [
   { id: 'ratings', label: 'Ratings' },
   { id: 'reviews', label: 'Reviews / Year' },
@@ -903,10 +906,11 @@ function showRecipeInfo(idx) {
 
   renderChartTabs('recipe-chart-tabs', RECIPE_TABS, activeRecipeTab, tabId => {
     activeRecipeTab = tabId;
+    if (tabId === null) { hideChartPanel(); return; }
     showRecipeChart(recipeIds[lockedIdx], tabId);
   });
   hideChartPanel();
-  showRecipeChart(recipeIds[idx]);
+  if (activeRecipeTab) showRecipeChart(recipeIds[idx]);
 
   // Show placeholder immediately, fill in async
   document.getElementById('recipe-name').textContent = `Recipe #${recipeIds[idx]}`;
@@ -981,9 +985,10 @@ function showClusterInfo(labelIdx) {
   currentClusterLabel = label;
   renderChartTabs('cluster-chart-tabs', CLUSTER_TABS, activeClusterTab, tabId => {
     activeClusterTab = tabId;
+    if (tabId === null) { hideChartPanel(); return; }
     showClusterChart(currentClusterFamily, currentClusterLabel, tabId);
   });
-  showClusterChart(family.name, label, activeClusterTab);
+  if (activeClusterTab) showClusterChart(family.name, label, activeClusterTab);
 }
 
 // ── Chart panel ───────────────────────────────────────────────────────────────
@@ -1118,7 +1123,8 @@ function renderChart(container, config, data) {
         };
 
         const halfGap = (x.step() - x.bandwidth()) / 2;
-        g.selectAll('.bar-hit').data(labels).join('rect')
+        const activeLabels = labels.filter((_, i) => counts[i] > 0);
+        g.selectAll('.bar-hit').data(activeLabels).join('rect')
           .attr('class', 'bar-hit')
           .attr('x', lbl => x(lbl) - halfGap)
           .attr('width', x.step())
@@ -1288,8 +1294,14 @@ function renderChartTabs(containerId, tabs, activeTab, onClick) {
     btn.textContent = label;
     btn.dataset.tabId = id;
     btn.addEventListener('click', () => {
-      el.querySelectorAll('.chart-tab').forEach(b => b.classList.toggle('active', b.dataset.tabId === id));
-      onClick(id);
+      const isActive = btn.classList.contains('active');
+      el.querySelectorAll('.chart-tab').forEach(b => b.classList.remove('active'));
+      if (!isActive) {
+        btn.classList.add('active');
+        onClick(id);
+      } else {
+        onClick(null);
+      }
     });
     el.appendChild(btn);
   });
@@ -1348,10 +1360,14 @@ async function showRecipeChart(recipeId, tabId = activeRecipeTab) {
     requestAnimationFrame(() => renderChart(chartEl, { chartType: 'histogram', labels, counts, colors, yLabel: 'Ratings' }, null));
 
   } else if (tabId === 'reviews') {
-    const labels = Object.keys(metrics.n_per_year).sort();
-    const counts = labels.map(y => metrics.n_per_year[y]);
+    const labels = [], counts = [];
+    for (let y = REVIEWS_YEAR_MIN; y <= REVIEWS_YEAR_MAX; y++) {
+      labels.push(String(y));
+      counts.push(metrics.n_per_year[y] ?? 0);
+    }
+    const colors = resolveDistColors('submitted', labels);
     document.getElementById('chart-panel-title').textContent = 'Reviews / Year';
-    requestAnimationFrame(() => renderChart(body, { chartType: 'histogram', labels, counts, yLabel: 'Reviews' }, null));
+    requestAnimationFrame(() => renderChart(body, { chartType: 'histogram', labels, counts, colors, yLabel: 'Reviews' }, null));
   }
 }
 
@@ -1375,10 +1391,13 @@ async function showClusterChart(familyName, label, tabId = activeClusterTab) {
 
   if (tabId === 'reviews') {
     const npy = d.reviews?.n_per_year ?? {};
-    const labels = Object.keys(npy).sort();
-    const counts = labels.map(y => npy[y]);
-    if (!labels.length) return;
-    showChartPanel({ chartType: 'histogram', title: 'Reviews / Year', labels, counts, yLabel: 'Reviews' }, null);
+    const labels = [], counts = [];
+    for (let y = REVIEWS_YEAR_MIN; y <= REVIEWS_YEAR_MAX; y++) {
+      labels.push(String(y));
+      counts.push(npy[y] ?? 0);
+    }
+    const colors = resolveDistColors('submitted', labels);
+    showChartPanel({ chartType: 'histogram', title: 'Reviews / Year', labels, counts, colors, yLabel: 'Reviews' }, null);
 
   } else if (tabId === 'ratings') {
     if (!d.reviews?.count_1 && !d.reviews?.count_5) return;
@@ -1412,8 +1431,17 @@ async function showClusterChart(familyName, label, tabId = activeClusterTab) {
   } else {
     const dist = d[tabId];
     if (!dist) return;
-    const labels = Object.keys(dist);
-    const counts = labels.map(l => dist[l]);
+    let labels, counts;
+    if (tabId === 'submitted') {
+      labels = []; counts = [];
+      for (let y = REVIEWS_YEAR_MIN; y <= REVIEWS_YEAR_MAX; y++) {
+        labels.push(String(y));
+        counts.push(dist[y] ?? 0);
+      }
+    } else {
+      labels = Object.keys(dist);
+      counts = labels.map(l => dist[l]);
+    }
     const colors = resolveDistColors(tabId, labels);
     const titles = {
       minutes: 'Cook Time',

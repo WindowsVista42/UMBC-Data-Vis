@@ -624,7 +624,7 @@ html, body {
 #chart-panel {
   position: fixed;
   bottom: 12px; left: 12px;
-  width: 290px;
+  width: 440px;
   background: rgba(15, 15, 28, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: 8px;
