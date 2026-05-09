@@ -154,17 +154,28 @@ html, body {
   padding: 18px 16px;
 }
 
-#explore-default h2 {
-  font-size: 15px;
+.explore-title {
+  font-size: 20px;
   font-weight: 600;
-  color: rgba(255,255,255,0.85);
-  margin-bottom: 8px;
+  color: rgba(255,255,255,0.90);
+  margin-bottom: 24px;
 }
 
-.explore-hint {
+.explore-hints p {
   font-size: 12px;
-  line-height: 1.65;
-  color: rgba(255,255,255,0.38);
+  line-height: 1.9;
+  color: rgba(255,255,255,0.42);
+}
+
+.explore-hints strong {
+  color: rgba(255,255,255,0.75);
+  font-weight: 600;
+}
+
+.explore-divider {
+  border: none;
+  border-top: 1px solid rgba(255,255,255,0.10);
+  margin: 10px 0;
 }
 
 #explore-recipe, #explore-cluster { display: none; }
