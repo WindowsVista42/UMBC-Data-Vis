@@ -343,13 +343,18 @@ function initScene(palette) {
   document.getElementById('fc-front')?.addEventListener('click', () => setCameraPreset('front'));
   document.getElementById('fc-side')?.addEventListener('click', () => setCameraPreset('side'));
 
-  const SIZE_MULTIPLIERS = [0.25, 0.5, 1.0, 2.0];
-  const sizeSlider = document.getElementById('fc-size');
-  sizeSlider?.addEventListener('input', () => {
-    const mul = SIZE_MULTIPLIERS[parseInt(sizeSlider.value)];
-    uniforms.uPointSize.value = 4.0 * mul;
-    document.getElementById('fc-size-val').textContent = mul + '×';
+
+  // UI scale
+  const applyScale = scale => {
+    document.documentElement.classList.remove('ui-s', 'ui-m', 'ui-l');
+    if (scale !== 'm') document.documentElement.classList.add(`ui-${scale}`);
+    document.querySelectorAll('.scale-btn').forEach(b => b.classList.toggle('active', b.dataset.scale === scale));
+    localStorage.setItem('uiScale', scale);
+  };
+  document.querySelectorAll('.scale-btn').forEach(btn => {
+    btn.addEventListener('click', () => applyScale(btn.dataset.scale));
   });
+  applyScale(localStorage.getItem('uiScale') ?? 'm');
 
   window.addEventListener('resize', onResize);
   renderer.domElement.addEventListener('pointerdown', onPointerDown);

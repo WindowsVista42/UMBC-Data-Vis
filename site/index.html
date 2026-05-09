@@ -143,11 +143,14 @@
     <div id="chart-panel-body"></div>
   </div>
 
-  <!-- ── Display widget ── -->
-  <div id="display-widget">
-    <span class="sw-label">Point Size</span>
-    <input class="sw-slider" id="fc-size" type="range" min="0" max="3" value="2" step="1">
-    <span class="sw-val" id="fc-size-val">1×</span>
+  <!-- ── Scale widget ── -->
+  <div id="scale-widget">
+    <span class="sw-label">UI Scale</span>
+    <div id="scale-btns">
+      <button class="scale-btn" data-scale="s">Small</button>
+      <button class="scale-btn active" data-scale="m">Medium</button>
+      <button class="scale-btn" data-scale="l">Large</button>
+    </div>
   </div>
 
   <script src="https://d3js.org/d3.v7.min.js"></script>
