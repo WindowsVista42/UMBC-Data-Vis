@@ -1,11 +1,16 @@
 /* ── Reset & base ──────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+button, input, select, textarea { font-family: inherit; letter-spacing: inherit; font-variant-numeric: inherit; }
 
 html, body {
   width: 100%; height: 100%; overflow: hidden;
   background: rgb(15, 15, 25);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Source Serif 4", serif;
   color: rgba(255, 255, 255, 0.82);
+  letter-spacing: 0.02em;
+  font-optical-sizing: auto;
+  font-variant-numeric: lining-nums;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* ── Top bar ───────────────────────────────────────────────────────────── */
