@@ -3,7 +3,7 @@
   --topbar-h:      44px;
   --panel-gap:     12px;
   --panel-w:       clamp(297px, 20vw, 310px);
-  --left-panel-h:  clamp(340px, 33vh, 347px);
+  --left-panel-h:  clamp(280px, 33vh, 400px);
   --right-panel-h: clamp(352px, 44vh, 478px);
   --chart-panel-w: clamp(418px, 30vw, 478px);
 }
@@ -506,55 +506,6 @@ html, body {
 }
 #share-copy:hover { background: rgba(72,115,155,1.00); }
 
-/* ── Scale widget ──────────────────────────────────────────────────────── */
-:root.ui-s {
-  --panel-w:       clamp(244px, 16vw, 254px);
-  --left-panel-h:  clamp(278px, 27vh, 284px);
-  --right-panel-h: clamp(288px, 36vh, 392px);
-  --chart-panel-w: clamp(342px, 25vw, 392px);
-}
-:root.ui-l {
-  --panel-w:       clamp(350px, 24vw, 366px);
-  --left-panel-h:  clamp(401px, 39vh, 409px);
-  --right-panel-h: clamp(415px, 52vh, 564px);
-  --chart-panel-w: clamp(493px, 36vw, 564px);
-}
-
-#scale-widget {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(15, 15, 28, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
-  padding: 5px 10px;
-  backdrop-filter: blur(6px);
-  z-index: 1000;
-  user-select: none;
-}
-
-#scale-btns {
-  display: flex;
-  gap: 2px;
-}
-
-.scale-btn {
-  font-size: 10px;
-  padding: 2px 7px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 10px;
-  color: rgba(255,255,255,0.38);
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s;
-}
-.scale-btn:hover  { background: rgba(255,255,255,0.09); color: rgba(255,255,255,0.70); }
-.scale-btn.active { background: rgba(78,121,167,0.30); border-color: rgba(78,121,167,0.55); color: rgba(255,255,255,0.90); }
-
-.sw-label { font-size: 10px; color: rgba(255,255,255,0.35); white-space: nowrap; }
 
 /* ── Hover tooltip ─────────────────────────────────────────────────────── */
 #hover-tip {

@@ -344,18 +344,6 @@ function initScene(palette) {
   document.getElementById('fc-side')?.addEventListener('click', () => setCameraPreset('side'));
 
 
-  // UI scale
-  const applyScale = scale => {
-    document.documentElement.classList.remove('ui-s', 'ui-m', 'ui-l');
-    if (scale !== 'm') document.documentElement.classList.add(`ui-${scale}`);
-    document.querySelectorAll('.scale-btn').forEach(b => b.classList.toggle('active', b.dataset.scale === scale));
-    localStorage.setItem('uiScale', scale);
-  };
-  document.querySelectorAll('.scale-btn').forEach(btn => {
-    btn.addEventListener('click', () => applyScale(btn.dataset.scale));
-  });
-  applyScale(localStorage.getItem('uiScale') ?? 'm');
-
   window.addEventListener('resize', onResize);
   renderer.domElement.addEventListener('pointerdown', onPointerDown);
   renderer.domElement.addEventListener('pointermove', onPointerMove);
