@@ -182,7 +182,7 @@ def compute_category_summaries(families, classes, recipes: pd.DataFrame, interac
 
     # Pre-build secondary bin lookups for distribution metrics.
     # Skipped gracefully if a family is absent (e.g. pipeline not fully run).
-    SEC_FAMILIES = ["minutes", "n_ingredients", "n_steps"]
+    SEC_FAMILIES = ["minutes", "n_ingredients", "n_steps", "n_ratings", "submitted", "cuisines", "meal_types"]
     sec_lookups = {
         name: {e["id"]: e["category"] for e in families[name] if e.get("category") is not None}
         for name in SEC_FAMILIES

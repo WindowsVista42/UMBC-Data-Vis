@@ -12,14 +12,17 @@
     100
   ],
   "labels": [
-    "no reviews",
-    "1 review",
-    "2-5 reviews",
-    "6-10 reviews",
-    "11-20 reviews",
-    "21-50 reviews",
-    "51-100 reviews",
-    "100+ reviews"
+    "no ratings",
+    "1 ratings",
+    "2-5 ratings",
+    "6-10 ratings",
+    "11-20 ratings",
+    "21-50 ratings",
+    "51-100 ratings",
+    "100+ ratings"
   ],
-  "missing_value": {"type": "value", "value": 0}
+  "missing_value": {
+    "type": "value",
+    "value": 0
+  }
 }
