@@ -116,8 +116,9 @@ const CLUSTER_TABS = [
   { id: 'minutes', label: 'Cook Time' },
   { id: 'n_ingredients', label: 'N Ingredients' },
   { id: 'n_steps', label: 'N Steps' },
-  { id: 'n_ratings', label: 'N Ratings' },
-  { id: 'submitted', label: 'Submitted' },
+  { id: 'n_ratings',  label: 'N Ratings' },
+  { id: 'avg_rating', label: 'Avg Rating' },
+  { id: 'submitted',  label: 'Submitted' },
   { id: 'cuisines', label: 'Cuisine' },
   { id: 'meal_types', label: 'Meal Type' },
 ];
@@ -1381,8 +1382,9 @@ async function showClusterChart(familyName, label, tabId = activeClusterTab) {
       minutes: 'Cook Time',
       n_ingredients: 'N Ingredients',
       n_steps: 'N Steps',
-      n_ratings: 'N Ratings',
-      submitted: 'Submitted',
+      n_ratings:  'N Ratings',
+      avg_rating: 'Avg Rating',
+      submitted:  'Submitted',
       cuisines: 'Cuisine',
       meal_types: 'Meal Type',
     };
