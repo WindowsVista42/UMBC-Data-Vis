@@ -52,7 +52,7 @@ const VERT = /* glsl */`
     vAlpha = 1.0;
     int paletteIdx = mode * uPaletteN + catId % uPaletteN;
     vColor = uPalette[paletteIdx] * dimFactor;
-    vOutline = (dimFactor > uSecDimFactor) && (mode == 0) ? 0.4 : 0.0;
+    vOutline = (dimFactor > uSecDimFactor) && (mode == 0) ? 1.0 : 0.0;
 
     vec4 mvPos    = modelViewMatrix * vec4(position, 1.0);
     gl_Position   = projectionMatrix * mvPos;
@@ -408,7 +408,7 @@ function applyIntersectionHighlight(secondaryFamName, secondaryLabel) {
 
   uniforms.uSecFamilyIdx.value = secFamIdx;
   uniforms.uSecLabelIdx.value = secLabelIdx;
-  uniforms.uSecDimFactor.value = 0.55;
+  uniforms.uSecDimFactor.value = 0.7;
 
   // Restrict raycasting to the intersection subset
   const secData = getCategoryFamilyData(secFamIdx);
@@ -620,6 +620,7 @@ function onPointerUp(e) {
 
   if (now - lastClickTime < DBL_CLICK_MS && lastClickTime > 0) {
     lastClickTime = 0;
+    if (appMode === 'story') return;
     hideHoverTip();
     lockedIdx = -1;
     if (idx >= 0) {
