@@ -27,6 +27,9 @@ const VERT = /* glsl */`
   uniform int  uPaletteN;
   uniform int  uCategoryModes[${MAX_LABELS}];
 
+  uniform int  uSecFamilyIdx;  // -1 = inactive
+  uniform int  uSecLabelIdx;
+
   void main() {
     int flatIdx = uActiveFamilyIdx * uN + gl_VertexID;
     int tx = flatIdx % ${CAT_TEX_W};
@@ -34,6 +37,13 @@ const VERT = /* glsl */`
     int catId = int(texelFetch(uCategoryTex, ivec2(tx, ty), 0).r);
 
     int mode = uCategoryModes[catId];
+
+    // Secondary filter: dim points in the primary selection that don't match
+    if (uSecFamilyIdx >= 0 && mode == 0) {
+      int secFlat  = uSecFamilyIdx * uN + gl_VertexID;
+      int secCatId = int(texelFetch(uCategoryTex, ivec2(secFlat % ${CAT_TEX_W}, secFlat / ${CAT_TEX_W}), 0).r);
+      if (secCatId != uSecLabelIdx) mode = 2;
+    }
 
     // mode 0 = normal, 1 = light, 2 = dark/desaturated — never hidden
     vAlpha = 1.0;
@@ -88,6 +98,8 @@ let   categoryMetricsIndex = null;      // {family: {label: filename}}
 // Multi-label highlight — when set, overrides highlightedLabelIdx.
 // null = use single-label system; Set<number> = active set of label indices.
 let highlightLabelSet = null;
+
+let savedIntersectionState = null; // {activeFam, modes[]} saved before intersection hover
 
 const RECIPE_TABS = [
   { id: 'ratings', label: 'Ratings' },
@@ -295,6 +307,8 @@ function initScene(palette) {
     uPalette:        { value: palette.flat },
     uPaletteN:       { value: palette.n },
     uCategoryModes:  { value: Array.from(categoryModes) },
+    uSecFamilyIdx:   { value: -1 },
+    uSecLabelIdx:    { value: 0  },
   };
 
   const mat = new THREE.ShaderMaterial({
@@ -373,6 +387,22 @@ function applyHighlightLabels(labelIdxs) {
     }
   }
   renderCategoryList();
+}
+
+function applyIntersectionHighlight(secondaryFamName, secondaryLabel) {
+  const secFamIdx = meta.categories.findIndex(c => c.name === secondaryFamName);
+  if (secFamIdx < 0) return;
+  const secLabelIdx = meta.categories[secFamIdx].labels.indexOf(secondaryLabel);
+  if (secLabelIdx < 0) return;
+  savedIntersectionState = true;
+  uniforms.uSecFamilyIdx.value = secFamIdx;
+  uniforms.uSecLabelIdx.value  = secLabelIdx;
+}
+
+function restoreIntersectionHighlight() {
+  if (!savedIntersectionState) return;
+  uniforms.uSecFamilyIdx.value = -1;
+  savedIntersectionState = null;
 }
 
 function setActiveFamily(idx) {
@@ -811,6 +841,7 @@ function renderCategoryList() {
 
 // ── Left panel: explore mode ──────────────────────────────────────────────────
 function showExploreDefault() {
+  restoreIntersectionHighlight();
   document.getElementById('explore-default').style.display = 'block';
   document.getElementById('explore-recipe').style.display  = 'none';
   document.getElementById('explore-cluster').style.display = 'none';
@@ -915,6 +946,7 @@ function showChartPanel(config, data) {
 }
 
 function hideChartPanel() {
+  restoreIntersectionHighlight();
   document.getElementById('chart-panel').classList.remove('open');
   document.getElementById('chart-panel-body').innerHTML = '';
 }
@@ -1008,13 +1040,35 @@ function renderChart(container, config, data) {
         });
       styleAxis(g.append('g').call(d3.axisLeft(y).ticks(4).tickFormat(d3.format('.2s'))));
 
-      g.selectAll('rect').data(counts).join('rect')
+      const bars = g.selectAll('.bar').data(counts).join('rect')
+        .attr('class', 'bar')
         .attr('x', (_, i) => x(labels[i]))
         .attr('width', x.bandwidth())
         .attr('y', d => y(d))
         .attr('height', d => innerH - y(d))
         .attr('fill', (_, i) => config.colors?.[i] ?? BAR_COLOR)
         .attr('opacity', 0.88);
+
+      if (config.onBarEnter) {
+        const halfGap = (x.step() - x.bandwidth()) / 2;
+        g.selectAll('.bar-hit').data(labels).join('rect')
+          .attr('class', 'bar-hit')
+          .attr('x', lbl => x(lbl) - halfGap)
+          .attr('width', x.step())
+          .attr('y', 0)
+          .attr('height', innerH)
+          .attr('fill', 'transparent')
+          .style('cursor', 'pointer')
+          .on('mouseover', (_, lbl) => {
+            bars.transition().duration(80)
+              .attr('opacity', (_, i) => labels[i] === lbl ? 1.0 : 0.28);
+            config.onBarEnter(lbl);
+          })
+          .on('mouseleave', () => {
+            bars.transition().duration(120).attr('opacity', 0.88);
+            config.onBarLeave?.();
+          });
+      }
 
     } else {
       const xMin = config.xMin ?? d3.min(data);
@@ -1212,6 +1266,7 @@ async function showRecipeChart(recipeId, tabId = activeRecipeTab) {
 }
 
 async function showClusterChart(familyName, label, tabId = activeClusterTab) {
+  restoreIntersectionHighlight();
   if (!categoryMetricsIndex) return;
 
   const filename = categoryMetricsIndex[familyName]?.[label];
@@ -1279,7 +1334,12 @@ async function showClusterChart(familyName, label, tabId = activeClusterTab) {
       cuisines:      'Cuisine',
       meal_types:    'Meal Type',
     };
-    showChartPanel({ chartType: 'histogram', title: titles[tabId] ?? tabId, labels, counts, colors, yLabel: 'Recipes' }, null);
+    showChartPanel({
+      chartType: 'histogram', title: titles[tabId] ?? tabId,
+      labels, counts, colors, yLabel: 'Recipes',
+      onBarEnter: lbl => applyIntersectionHighlight(tabId, lbl),
+      onBarLeave: restoreIntersectionHighlight,
+    }, null);
   }
 }
 
