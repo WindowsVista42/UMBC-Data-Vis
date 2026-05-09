@@ -890,15 +890,15 @@ function randomizeRecipe() {
 
 function showExploreDefault() {
   restoreIntersectionHighlight();
-  document.getElementById('explore-default').style.display = 'block';
-  document.getElementById('explore-recipe').style.display = 'none';
-  document.getElementById('explore-cluster').style.display = 'none';
+  document.getElementById('explore-default').style.display = 'flex';
+  document.getElementById('explore-content').style.display = 'none';
   document.getElementById('explore-panel-footer').style.display = 'none';
   hideChartPanel();
 }
 
 function showRecipeInfo(idx) {
   document.getElementById('explore-default').style.display = 'none';
+  document.getElementById('explore-content').style.display = 'block';
   document.getElementById('explore-recipe').style.display = 'block';
   document.getElementById('explore-cluster').style.display = 'none';
   document.getElementById('cluster-chart-tabs').innerHTML = '';
@@ -974,6 +974,7 @@ function showClusterInfo(labelIdx) {
   for (let i = 0; i < N; i++) if (famData[i] === labelIdx) count++;
 
   document.getElementById('explore-default').style.display = 'none';
+  document.getElementById('explore-content').style.display = 'block';
   document.getElementById('explore-recipe').style.display = 'none';
   document.getElementById('explore-cluster').style.display = 'block';
   document.getElementById('recipe-chart-tabs').innerHTML = '';
@@ -1051,8 +1052,8 @@ function renderChart(container, config, data) {
   const margin = type === 'beeswarm'
     ? { top: 8, right: 10, bottom: 26, left: 10 }
     : isBinned
-      ? { top: 22, right: 10, bottom: 52, left: 36 }
-      : { top: 8, right: 10, bottom: 26, left: 34 };
+      ? { top: 26, right: 14, bottom: 52, left: 24 }
+      : { top: 8, right: 14, bottom: 26, left: 34 };
   const innerW = W - margin.left - margin.right;
   const innerH = H - margin.top - margin.bottom;
 
@@ -1078,7 +1079,7 @@ function renderChart(container, config, data) {
     if (isBinned) {
       const labels = config.labels;
       const counts = config.counts;
-      const x = d3.scaleBand().domain(labels).range([0, innerW]).padding(0.12);
+      const x = d3.scaleBand().domain(labels).range([0, innerW]).paddingInner(0.12).paddingOuter(0.5);
       const yMax = config.yMax ?? d3.max(counts);
       const y = d3.scaleLinear().domain([0, yMax]).range([innerH, 0]);
 
@@ -1093,7 +1094,8 @@ function renderChart(container, config, data) {
             .attr('text-anchor', 'end')
             .attr('dx', '-0.4em').attr('dy', '0.15em');
         });
-      styleAxis(g.append('g').call(d3.axisLeft(y).tickValues(y.ticks(4).filter(Number.isInteger)).tickFormat(d => d >= 1000 ? d3.format('.0s')(d) : d)));
+      styleAxis(g.append('g').call(d3.axisLeft(y).tickValues([]))
+        .call(a => a.selectAll('.tick').remove()));
 
       const bars = g.selectAll('.bar').data(counts).join('rect')
         .attr('class', 'bar')
@@ -1105,6 +1107,31 @@ function renderChart(container, config, data) {
         .attr('opacity', 0.88)
         .attr('stroke', 'none')
         .attr('stroke-width', 1.5);
+
+      const fmtFull = d => d.toLocaleString();
+      const fmtAbbr = d => d >= 1000 ? d3.format('.1s')(d) : String(d);
+      const labelFits = (d, bw) => fmtFull(d).length * 5.4 <= bw;
+      const abbrFits = (d, bw) => fmtAbbr(d).length * 5.4 <= bw;
+      const LABEL_Y = 4;
+      g.selectAll('.bar-count').data(counts).join('text')
+        .attr('class', 'bar-count')
+        .attr('pointer-events', 'none')
+        .attr('font-size', '9px')
+        .attr('text-anchor', 'middle')
+        .attr('dominant-baseline', 'hanging')
+        .attr('fill', TEXT_COLOR)
+        .attr('x', (_, i) => x(labels[i]) + x.bandwidth() / 2)
+        .attr('y', LABEL_Y)
+        .attr('opacity', d => {
+          if (!d) return 0;
+          const bw = x.bandwidth();
+          return abbrFits(d, bw) ? 1 : 0;
+        })
+        .text(d => {
+          if (!d) return '';
+          const bw = x.bandwidth();
+          return labelFits(d, bw) ? fmtFull(d) : abbrFits(d, bw) ? fmtAbbr(d) : '';
+        });
 
       if (config.onBarEnter) {
         let lockedLabel = null;
@@ -1330,7 +1357,19 @@ async function showRecipeChart(recipeId, tabId = activeRecipeTab) {
   }
 
   const metrics = recipeMetricsCache.get(shard)?.[String(recipeId)];
-  if (!metrics || !metrics.n_ratings) { hideChartPanel(); return; }
+  const hasRatings = !!(metrics?.n_ratings);
+  const hasReviews = !!(metrics?.n_reviews);
+
+  document.querySelectorAll('#recipe-chart-tabs .chart-tab').forEach(btn => {
+    const tid = btn.dataset.tabId;
+    const enabled = (tid === 'ratings' && hasRatings) || (tid === 'reviews' && hasReviews);
+    btn.classList.toggle('disabled', !enabled);
+  });
+
+  if (!tabId || (tabId === 'ratings' && !hasRatings) || (tabId === 'reviews' && !hasReviews)) {
+    hideChartPanel();
+    return;
+  }
 
   const body = document.getElementById('chart-panel-body');
   body.innerHTML = '';

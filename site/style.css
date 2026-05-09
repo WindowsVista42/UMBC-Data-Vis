@@ -79,7 +79,7 @@ html, body {
   position: fixed;
   top: 56px; left: 12px;
   width: 290px;
-  height: 400px;
+  height: 300px;
   background: rgba(15, 15, 28, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: 8px;
@@ -152,7 +152,15 @@ html, body {
   height: 100%;
 }
 
+#explore-default {
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  padding: 18px 16px 12px;
+}
+
 #explore-content {
+  display: none;
   flex: 1;
   overflow-y: auto;
   padding: 18px 16px 12px;
@@ -177,13 +185,17 @@ html, body {
   font-size: 12px;
   line-height: 1.6;
   color: rgba(255,255,255,0.38);
-  margin-bottom: 20px;
+  margin-bottom: 0;
+}
+
+.explore-hints {
+  margin-top: auto;
 }
 
 #btn-randomize {
   display: none;
   position: fixed;
-  top: 464px; left: 12px;
+  top: 364px; left: 12px;
   width: 290px;
   font-size: 12px;
   padding: 7px 14px;
@@ -685,8 +697,9 @@ html, body {
   white-space: nowrap;
   transition: background 0.12s, color 0.12s;
 }
-.chart-tab:hover  { background: rgba(255,255,255,0.09); color: rgba(255,255,255,0.75); }
-.chart-tab.active { background: rgba(78,121,167,0.30); border-color: rgba(78,121,167,0.55); color: rgba(255,255,255,0.90); }
+.chart-tab:hover         { background: rgba(255,255,255,0.09); color: rgba(255,255,255,0.75); }
+.chart-tab.active        { background: rgba(78,121,167,0.30); border-color: rgba(78,121,167,0.55); color: rgba(255,255,255,0.90); }
+.chart-tab.disabled      { opacity: 0.25; cursor: not-allowed; pointer-events: none; }
 
 .chart-stat-header {
   display: flex;
