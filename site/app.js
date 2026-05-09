@@ -111,16 +111,17 @@ const RECIPE_TABS = [
   { id: 'reviews', label: 'Reviews / Year' },
 ];
 const CLUSTER_TABS = [
-  { id: 'reviews', label: 'Reviews / Year' },
-  { id: 'ratings', label: 'Ratings' },
-  { id: 'minutes', label: 'Cook Time' },
-  { id: 'n_ingredients', label: 'N Ingredients' },
-  { id: 'n_steps', label: 'N Steps' },
-  { id: 'n_ratings',  label: 'N Ratings' },
-  { id: 'avg_rating', label: 'Avg Rating' },
-  { id: 'submitted',  label: 'Submitted' },
-  { id: 'cuisines', label: 'Cuisine' },
-  { id: 'meal_types', label: 'Meal Type' },
+  { id: 'ratings',      label: 'Ratings' },
+  { id: 'reviews',      label: 'Reviews / Year' },
+  { separator: true },
+  { id: 'avg_rating',   label: 'Avg Rating' },
+  { id: 'cuisines',     label: 'Cuisine' },
+  { id: 'meal_types',   label: 'Meal Type' },
+  { id: 'minutes',      label: 'Cook Time' },
+  { id: 'n_ingredients',label: 'N Ingredients' },
+  { id: 'n_ratings',    label: 'N Ratings' },
+  { id: 'n_steps',      label: 'N Steps' },
+  { id: 'submitted',    label: 'Submitted' },
 ];
 
 let activeRecipeTab = 'ratings';
@@ -1274,7 +1275,14 @@ function renderChart(container, config, data) {
 function renderChartTabs(containerId, tabs, activeTab, onClick) {
   const el = document.getElementById(containerId);
   el.innerHTML = '';
-  tabs.forEach(({ id, label }) => {
+  tabs.forEach(tab => {
+    if (tab.separator) {
+      const sep = document.createElement('span');
+      sep.className = 'tab-group-separator';
+      el.appendChild(sep);
+      return;
+    }
+    const { id, label } = tab;
     const btn = document.createElement('button');
     btn.className = 'chart-tab' + (id === activeTab ? ' active' : '');
     btn.textContent = label;
