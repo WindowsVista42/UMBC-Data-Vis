@@ -594,6 +594,30 @@ html, body {
   overflow: hidden;
 }
 
+/* ── Chart tab bar ─────────────────────────────────────────────────────── */
+.chart-tab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-top: 10px;
+  margin-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+}
+
+.chart-tab {
+  font-size: 10px;
+  padding: 3px 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  color: rgba(255,255,255,0.42);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+}
+.chart-tab:hover  { background: rgba(255,255,255,0.09); color: rgba(255,255,255,0.75); }
+.chart-tab.active { background: rgba(78,121,167,0.30); border-color: rgba(78,121,167,0.55); color: rgba(255,255,255,0.90); }
+
 .chart-stat-header {
   display: flex;
   align-items: baseline;

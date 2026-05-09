@@ -85,6 +85,27 @@ const recipeMetricsCache   = new Map(); // shard -> {rid_str: metrics | {}}
 const categoryMetricsCache = new Map(); // filename -> data
 let   categoryMetricsIndex = null;      // {family: {label: filename}}
 
+const RECIPE_TABS = [
+  { id: 'ratings', label: 'Ratings' },
+  { id: 'reviews', label: 'Reviews / Year' },
+];
+const CLUSTER_TABS = [
+  { id: 'reviews',       label: 'Reviews / Year' },
+  { id: 'ratings',       label: 'Ratings' },
+  { id: 'minutes',       label: 'Cook Time' },
+  { id: 'n_ingredients', label: 'N Ingredients' },
+  { id: 'n_steps',       label: 'N Steps' },
+  { id: 'n_ratings',     label: 'N Ratings' },
+  { id: 'submitted',     label: 'Submitted' },
+  { id: 'cuisines',      label: 'Cuisine' },
+  { id: 'meal_types',    label: 'Meal Type' },
+];
+
+let activeRecipeTab    = 'ratings';
+let activeClusterTab   = 'reviews';
+let currentClusterFamily = null;
+let currentClusterLabel  = null;
+
 let renderer, scene, camera, controls;
 let geometry, pointsMesh;
 let uniforms = {};
@@ -775,6 +796,10 @@ function showRecipeInfo(idx) {
   document.getElementById('explore-recipe').style.display  = 'block';
   document.getElementById('explore-cluster').style.display = 'none';
 
+  renderChartTabs('recipe-chart-tabs', RECIPE_TABS, activeRecipeTab, tabId => {
+    activeRecipeTab = tabId;
+    showRecipeChart(recipeIds[lockedIdx], tabId);
+  });
   hideChartPanel();
   showRecipeChart(recipeIds[idx]);
 
@@ -844,7 +869,14 @@ function showClusterInfo(labelIdx) {
   document.getElementById('explore-cluster').style.display = 'block';
   document.getElementById('cluster-name').textContent  = label;
   document.getElementById('cluster-count').textContent = `${count.toLocaleString()} recipes`;
-  showClusterChart(family.name, label);
+
+  currentClusterFamily = family.name;
+  currentClusterLabel  = label;
+  renderChartTabs('cluster-chart-tabs', CLUSTER_TABS, activeClusterTab, tabId => {
+    activeClusterTab = tabId;
+    showClusterChart(currentClusterFamily, currentClusterLabel, tabId);
+  });
+  showClusterChart(family.name, label, activeClusterTab);
 }
 
 // ── Chart panel ───────────────────────────────────────────────────────────────
@@ -1077,7 +1109,34 @@ function renderChart(container, config, data) {
 }
 
 // ── Explore charts ────────────────────────────────────────────────────────────
-async function showRecipeChart(recipeId) {
+function renderChartTabs(containerId, tabs, activeTab, onClick) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = '';
+  tabs.forEach(({ id, label }) => {
+    const btn = document.createElement('button');
+    btn.className = 'chart-tab' + (id === activeTab ? ' active' : '');
+    btn.textContent = label;
+    btn.dataset.tabId = id;
+    btn.addEventListener('click', () => {
+      el.querySelectorAll('.chart-tab').forEach(b => b.classList.toggle('active', b.dataset.tabId === id));
+      onClick(id);
+    });
+    el.appendChild(btn);
+  });
+}
+
+function resolveDistColors(familyName, labels) {
+  const fam = meta?.categories.find(c => c.name === familyName);
+  if (!fam) return labels.map(() => '#4e79a7');
+  return labels.map(lbl => {
+    const li = fam.labels.indexOf(lbl);
+    if (li < 0) return '#4e79a7';
+    const [r, g, b] = getPaletteRgb(li);
+    return `rgb(${r},${g},${b})`;
+  });
+}
+
+async function showRecipeChart(recipeId, tabId = activeRecipeTab) {
   const shard = String(recipeId).slice(-2).padStart(2, '0');
 
   if (!recipeMetricsCache.has(shard)) {
@@ -1089,39 +1148,44 @@ async function showRecipeChart(recipeId) {
   }
 
   const metrics = recipeMetricsCache.get(shard)?.[String(recipeId)];
-  if (!metrics || !metrics.n_ratings) return;
-
-  // Resolve palette colors: map star labels to avg_rating family indices
-  const avgFam   = meta?.categories.find(c => c.name === 'avg_rating');
-  const idxMap   = { '1 star': 1, '2 stars': 2, '3 stars': 3, '4 stars': 4, '5 stars': 7 };
-  const labels   = ['1 star', '2 stars', '3 stars', '4 stars', '5 stars'];
-  const counts   = [metrics.count_1, metrics.count_2, metrics.count_3, metrics.count_4, metrics.count_5];
-  const colors   = labels.map(lbl => {
-    const li = idxMap[lbl];
-    if (!avgFam || li == null) return '#4e79a7';
-    const [r, g, b] = getPaletteRgb(li);
-    return `rgb(${r},${g},${b})`;
-  });
+  if (!metrics || !metrics.n_ratings) { hideChartPanel(); return; }
 
   const body = document.getElementById('chart-panel-body');
   body.innerHTML = '';
-  document.getElementById('chart-panel-title').textContent = 'Ratings';
   document.getElementById('chart-panel').classList.add('open');
 
-  // Google Maps-style stat header
-  const stat = document.createElement('div');
-  stat.className = 'chart-stat-header';
-  stat.innerHTML =
-    `<span class="chart-stat-avg">${metrics.avg_rating?.toFixed(1) ?? '—'}</span>` +
-    `<span class="chart-stat-meta"> · ${metrics.n_ratings.toLocaleString()} rating${metrics.n_ratings !== 1 ? 's' : ''}</span>`;
-  body.appendChild(stat);
+  if (tabId === 'ratings') {
+    const idxMap = { '1 star': 1, '2 stars': 2, '3 stars': 3, '4 stars': 4, '5 stars': 7 };
+    const labels = ['1 star', '2 stars', '3 stars', '4 stars', '5 stars'];
+    const counts = [metrics.count_1, metrics.count_2, metrics.count_3, metrics.count_4, metrics.count_5];
+    const colors = labels.map(lbl => {
+      const avgFam = meta?.categories.find(c => c.name === 'avg_rating');
+      const li = idxMap[lbl];
+      if (!avgFam || li == null) return '#4e79a7';
+      const [r, g, b] = getPaletteRgb(li);
+      return `rgb(${r},${g},${b})`;
+    });
 
-  const chartEl = document.createElement('div');
-  body.appendChild(chartEl);
-  requestAnimationFrame(() => renderChart(chartEl, { chartType: 'histogram', labels, counts, colors, yLabel: 'Ratings' }, null));
+    document.getElementById('chart-panel-title').textContent = 'Ratings';
+    const stat = document.createElement('div');
+    stat.className = 'chart-stat-header';
+    stat.innerHTML =
+      `<span class="chart-stat-avg">${metrics.avg_rating?.toFixed(1) ?? '—'}</span>` +
+      `<span class="chart-stat-meta"> · ${metrics.n_ratings.toLocaleString()} rating${metrics.n_ratings !== 1 ? 's' : ''}</span>`;
+    body.appendChild(stat);
+    const chartEl = document.createElement('div');
+    body.appendChild(chartEl);
+    requestAnimationFrame(() => renderChart(chartEl, { chartType: 'histogram', labels, counts, colors, yLabel: 'Ratings' }, null));
+
+  } else if (tabId === 'reviews') {
+    const labels = Object.keys(metrics.n_per_year).sort();
+    const counts = labels.map(y => metrics.n_per_year[y]);
+    document.getElementById('chart-panel-title').textContent = 'Reviews / Year';
+    requestAnimationFrame(() => renderChart(body, { chartType: 'histogram', labels, counts, yLabel: 'Reviews' }, null));
+  }
 }
 
-async function showClusterChart(familyName, label) {
+async function showClusterChart(familyName, label, tabId = activeClusterTab) {
   if (!categoryMetricsIndex) return;
 
   const filename = categoryMetricsIndex[familyName]?.[label];
@@ -1135,16 +1199,62 @@ async function showClusterChart(familyName, label) {
     } catch { return; }
   }
 
-  const catData = categoryMetricsCache.get(filename);
-  if (!catData?.reviews_per_year) return;
+  const d = categoryMetricsCache.get(filename);
+  if (!d) return;
 
-  const points = Object.entries(catData.reviews_per_year)
-    .map(([y, c]) => [parseInt(y), c])
-    .sort((a, b) => a[0] - b[0]);
+  if (tabId === 'reviews') {
+    const npy = d.reviews?.n_per_year ?? {};
+    const labels = Object.keys(npy).sort();
+    const counts = labels.map(y => npy[y]);
+    if (!labels.length) return;
+    showChartPanel({ chartType: 'histogram', title: 'Reviews / Year', labels, counts, yLabel: 'Reviews' }, null);
 
-  if (!points.length) return;
+  } else if (tabId === 'ratings') {
+    if (!d.reviews?.count_1 && !d.reviews?.count_5) return;
+    const idxMap = { '1 star': 1, '2 stars': 2, '3 stars': 3, '4 stars': 4, '5 stars': 7 };
+    const labels = ['1 star', '2 stars', '3 stars', '4 stars', '5 stars'];
+    const counts = [d.reviews.count_1, d.reviews.count_2, d.reviews.count_3, d.reviews.count_4, d.reviews.count_5];
+    const colors = labels.map(lbl => {
+      const avgFam = meta?.categories.find(c => c.name === 'avg_rating');
+      const li = idxMap[lbl];
+      if (!avgFam || li == null) return '#4e79a7';
+      const [r, g, b] = getPaletteRgb(li);
+      return `rgb(${r},${g},${b})`;
+    });
 
-  showChartPanel({ chartType: 'line', title: 'Reviews per year', xLabel: 'Year', yLabel: 'Reviews' }, points);
+    const body = document.getElementById('chart-panel-body');
+    body.innerHTML = '';
+    document.getElementById('chart-panel-title').textContent = 'Ratings';
+    document.getElementById('chart-panel').classList.add('open');
+    const avg = d.reviews?.avg_rating;
+    const total = d.reviews?.total_reviews ?? 0;
+    const stat = document.createElement('div');
+    stat.className = 'chart-stat-header';
+    stat.innerHTML =
+      `<span class="chart-stat-avg">${avg?.toFixed(1) ?? '—'}</span>` +
+      `<span class="chart-stat-meta"> · ${total.toLocaleString()} reviews</span>`;
+    body.appendChild(stat);
+    const chartEl = document.createElement('div');
+    body.appendChild(chartEl);
+    requestAnimationFrame(() => renderChart(chartEl, { chartType: 'histogram', labels, counts, colors, yLabel: 'Recipes' }, null));
+
+  } else {
+    const dist = d[tabId];
+    if (!dist) return;
+    const labels = Object.keys(dist);
+    const counts = labels.map(l => dist[l]);
+    const colors = resolveDistColors(tabId, labels);
+    const titles = {
+      minutes:       'Cook Time',
+      n_ingredients: 'N Ingredients',
+      n_steps:       'N Steps',
+      n_ratings:     'N Ratings',
+      submitted:     'Submitted',
+      cuisines:      'Cuisine',
+      meal_types:    'Meal Type',
+    };
+    showChartPanel({ chartType: 'histogram', title: titles[tabId] ?? tabId, labels, counts, colors, yLabel: 'Recipes' }, null);
+  }
 }
 
 // ── Left panel: story mode ────────────────────────────────────────────────────
