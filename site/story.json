@@ -12,7 +12,7 @@
     {
       "colorBy": "cuisines",
       "camera": { "position": [8.250, 5.778, -3.709], "target": [5.330, 0.984, 3.374] },
-      "highlight": { "family": "cuisines", "label": "american" },
+      "highlight": ["american", "cajun", "midwestern", "northeastern-united-states", "southern-united-states", "southwestern-united-states", "tex-mex"],
       "content": [
         { "type": "text", "style": "heading", "value": "American Cuisine Dominates" },
         { "type": "text", "style": "body", "value": "American recipes form the largest cluster — over 30,000 recipes from home cooking across every region of the US." }
@@ -21,7 +21,7 @@
     {
       "colorBy": "cuisines",
       "camera": { "position": [-1.540, 2.824, 13.634], "target": [3.055, 0.753, 5.589] },
-      "highlight": { "family": "cuisines", "label": "mexican" },
+      "highlight": "mexican",
       "content": [
         { "type": "text", "style": "heading", "value": "Mexican Cuisine" }
       ]
@@ -29,7 +29,7 @@
     {
       "colorBy": "cuisines",
       "camera": { "position": [5.999, 2.405, -1.624], "target": [-0.359, -1.055, 3.787] },
-      "highlight": { "family": "cuisines", "label": "italian" },
+      "highlight": "italian",
       "content": [
         { "type": "text", "style": "heading", "value": "Italian Cuisine" }
       ]
@@ -46,7 +46,7 @@
     {
       "colorBy": "minutes",
       "camera": { "position": [-4.957, 5.133, 6.954], "target": [1.095, 0.854, 6.586] },
-      "highlight": { "family": "minutes", "label": "4+ hrs" },
+      "highlight": "4+ hrs",
       "content": [
         { "type": "text", "style": "heading", "value": "The Longest Recipes" },
         { "type": "text", "style": "body", "value": "Among the longest recipes, one cluster stands out — densely packed with stews and chilis. Hover over the points to see for yourself." }
@@ -55,7 +55,7 @@
     {
       "colorBy": "avg_rating",
       "camera": { "position": [8.295, 2.733, -4.451], "target": [4.943, 0.549, 3.165] },
-      "highlight": { "family": "avg_rating", "label": "5 stars" },
+      "highlight": "5 stars",
       "content": [
         { "type": "text", "style": "heading", "value": "The 5-Star Split" },
         { "type": "text", "style": "body", "value": "Coloring by average rating reveals a striking pattern. A large cluster of recipes sits at a perfect 5 stars, clearly separated from recipes with lower ratings." },
@@ -65,7 +65,7 @@
     {
       "colorBy": "n_ratings",
       "camera": { "position": [7.113, 3.813, -2.102], "target": [4.778, 1.884, 2.516] },
-      "highlight": { "family": "n_ratings", "label": "100+ reviews" },
+      "highlight": "100+ reviews",
       "content": [
         { "type": "text", "style": "heading", "value": "Very Few Recipes Have 100+ Reviews" },
         { "type": "text", "style": "body", "value": "The recipes that have broken through to wide audiences are rare. Those that did tend to be approachable, familiar dishes — the kind people make on a weeknight and feel compelled to rate." }

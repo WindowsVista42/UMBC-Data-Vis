@@ -85,6 +85,10 @@ const recipeMetricsCache   = new Map(); // shard -> {rid_str: metrics | {}}
 const categoryMetricsCache = new Map(); // filename -> data
 let   categoryMetricsIndex = null;      // {family: {label: filename}}
 
+// Multi-label highlight — when set, overrides highlightedLabelIdx.
+// null = use single-label system; Set<number> = active set of label indices.
+let highlightLabelSet = null;
+
 const RECIPE_TABS = [
   { id: 'ratings', label: 'Ratings' },
   { id: 'reviews', label: 'Reviews / Year' },
@@ -333,9 +337,7 @@ function initScene(palette) {
 
 // ── Category mode management ──────────────────────────────────────────────────
 function setHighlightLabel(labelIdx) {
-  // -1 = clear all (all normal)
-  // else: selected label stays mode=0 (normal color), others go to mode=2 (dark/desaturated)
-  // Points are never hidden — mode=2 is dark but still visible and raycasted
+  highlightLabelSet   = null;
   highlightedLabelIdx = labelIdx;
   const nLabels = meta.categories[activeFamilyIdx].labels.length;
   for (let i = 0; i < MAX_LABELS; i++) {
@@ -354,9 +356,29 @@ function setHighlightLabel(labelIdx) {
   renderCategoryList();
 }
 
+function applyHighlightLabels(labelIdxs) {
+  highlightLabelSet = new Set(labelIdxs);
+  const nLabels = meta.categories[activeFamilyIdx].labels.length;
+  for (let i = 0; i < MAX_LABELS; i++) {
+    if (i >= nLabels) { categoryModes[i] = 0; continue; }
+    categoryModes[i] = (highlightLabelSet.size === 0 || highlightLabelSet.has(i)) ? 0 : 2;
+  }
+  uniforms.uCategoryModes.value = Array.from(categoryModes);
+  if (highlightLabelSet.size === 0) {
+    alphaCache.fill(1.0);
+  } else {
+    const famData = getCategoryFamilyData(activeFamilyIdx);
+    for (let i = 0; i < N; i++) {
+      alphaCache[i] = highlightLabelSet.has(famData[i]) ? 1.0 : 0.0;
+    }
+  }
+  renderCategoryList();
+}
+
 function setActiveFamily(idx) {
   activeFamilyIdx = idx;
   highlightedLabelIdx = -1;
+  highlightLabelSet = null;
   categoryModes.fill(0);
   uniforms.uActiveFamilyIdx.value = idx;
   uniforms.uCategoryModes.value   = Array.from(categoryModes);
@@ -743,10 +765,14 @@ function renderCategoryList() {
   const palette    = uniforms.uPalette.value;
   const paletteN   = uniforms.uPaletteN.value;
 
+  const activeSet  = highlightLabelSet ?? (highlightedLabelIdx >= 0 ? new Set([highlightedLabelIdx]) : new Set());
+  const hasHighlight = activeSet.size > 0;
+
   listEl.innerHTML = '';
   family.labels.forEach((label, labelIdx) => {
+    const isActive = activeSet.has(labelIdx);
     const row = document.createElement('div');
-    row.className = 'cat-row' + (highlightedLabelIdx === labelIdx ? ' active' : '');
+    row.className = 'cat-row' + (isActive ? ' active' : '');
 
     const palBase = labelIdx % paletteN;
     const r = Math.round(palette[palBase * 3]     * 255);
@@ -759,7 +785,7 @@ function renderCategoryList() {
     dot.style.background = hex;
 
     const nameEl = document.createElement('span');
-    nameEl.className = 'cat-label' + (highlightedLabelIdx >= 0 && highlightedLabelIdx !== labelIdx ? ' dimmed' : '');
+    nameEl.className = 'cat-label' + (hasHighlight && !isActive ? ' dimmed' : '');
     nameEl.textContent = label;
 
     const countEl = document.createElement('span');
@@ -1269,18 +1295,16 @@ function applyStep(step) {
       });
     }
   }
-  // Apply highlight
+  // Apply highlight — string, array of strings, or null. Family is always colorBy.
   if (step.highlight) {
-    const famIdx = meta.categories.findIndex(c => c.name === step.highlight.family);
-    if (famIdx >= 0) {
-      if (famIdx !== activeFamilyIdx) {
-        setActiveFamily(famIdx);
-        document.querySelectorAll('.cat-tab').forEach((btn, i) => {
-          btn.classList.toggle('active', i === famIdx);
-        });
-      }
-      const labelIdx = meta.categories[famIdx].labels.indexOf(step.highlight.label);
-      if (labelIdx >= 0) setHighlightLabel(labelIdx);
+    const labels = Array.isArray(step.highlight) ? step.highlight : [step.highlight];
+    const labelIdxs = labels
+      .map(lbl => meta.categories[activeFamilyIdx].labels.indexOf(lbl))
+      .filter(i => i >= 0);
+    if (labelIdxs.length === 1) {
+      setHighlightLabel(labelIdxs[0]);
+    } else if (labelIdxs.length > 1) {
+      applyHighlightLabels(labelIdxs);
     }
   } else {
     setHighlightLabel(-1);
@@ -1351,7 +1375,10 @@ function setMode(mode) {
   document.getElementById('story-panel').style.display   = mode === 'story'   ? 'flex' : 'none';
   document.getElementById('explore-panel').style.display = mode === 'explore' ? 'flex' : 'none';
 
+  document.getElementById('right-column').classList.toggle('story-mode', mode === 'story');
+
   if (mode === 'explore') {
+    highlightLabelSet = null;
     setHighlightLabel(-1);
     showExploreDefault();
     lockedIdx = -1;

@@ -232,6 +232,15 @@ html, body {
   text-align: center;
 }
 
+/* ── Right column story lock ───────────────────────────────────────────── */
+#right-column.story-mode #category-tabs,
+#right-column.story-mode .cat-row {
+  pointer-events: none;
+}
+#right-column.story-mode {
+  opacity: 0.82;
+}
+
 /* ── Right panel ───────────────────────────────────────────────────────── */
 #right-panel {
   /* flex: 1; */
