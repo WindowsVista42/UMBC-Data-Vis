@@ -1087,7 +1087,7 @@ function renderChart(container, config, data) {
             .attr('text-anchor', 'end')
             .attr('dx', '-0.4em').attr('dy', '0.15em');
         });
-      styleAxis(g.append('g').call(d3.axisLeft(y).ticks(4).tickFormat(d3.format('.2s'))));
+      styleAxis(g.append('g').call(d3.axisLeft(y).tickValues(y.ticks(4).filter(Number.isInteger)).tickFormat(d => d >= 1000 ? d3.format('.0s')(d) : d)));
 
       const bars = g.selectAll('.bar').data(counts).join('rect')
         .attr('class', 'bar')
@@ -1161,7 +1161,7 @@ function renderChart(container, config, data) {
       const y = d3.scaleLinear().domain([0, yMax]).range([innerH, 0]);
 
       styleAxis(g.append('g').attr('transform', `translate(0,${innerH})`).call(d3.axisBottom(x).ticks(5)));
-      styleAxis(g.append('g').call(d3.axisLeft(y).ticks(4)));
+      styleAxis(g.append('g').call(d3.axisLeft(y).tickValues(y.ticks(4).filter(Number.isInteger)).tickFormat(d => d >= 1000 ? d3.format('.0s')(d) : d)));
 
       g.selectAll('rect').data(bins).join('rect')
         .attr('x', b => x(b.x0) + 1)
@@ -1218,7 +1218,7 @@ function renderChart(container, config, data) {
       .range([innerH, 0]);
 
     styleAxis(g.append('g').attr('transform', `translate(0,${innerH})`).call(d3.axisBottom(x).ticks(5)));
-    styleAxis(g.append('g').call(d3.axisLeft(y).ticks(4)));
+    styleAxis(g.append('g').call(d3.axisLeft(y).tickValues(y.ticks(4).filter(Number.isInteger)).tickFormat(d => d >= 1000 ? d3.format('.0s')(d) : d)));
 
     g.append('path').datum(data)
       .attr('fill', 'none').attr('stroke', BAR_COLOR).attr('stroke-width', 1.5)
@@ -1245,7 +1245,7 @@ function renderChart(container, config, data) {
       .range([innerH, 0]);
 
     styleAxis(g.append('g').attr('transform', `translate(0,${innerH})`).call(d3.axisBottom(x).ticks(5)));
-    styleAxis(g.append('g').call(d3.axisLeft(y).ticks(4)));
+    styleAxis(g.append('g').call(d3.axisLeft(y).tickValues(y.ticks(4).filter(Number.isInteger)).tickFormat(d => d >= 1000 ? d3.format('.0s')(d) : d)));
 
     g.selectAll('circle').data(data).join('circle')
       .attr('cx', d => x(d[0])).attr('cy', d => y(d[1]))
