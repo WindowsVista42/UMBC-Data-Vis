@@ -1,21 +1,22 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { DRACOLoader }   from 'three/addons/loaders/DRACOLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const DATA       = 'data/';
-const LEFT_W     = 0;
-const RIGHT_W    = 0;
-const TOPBAR_H   = 44;
-const CAT_TEX_W  = 4096;   // texture width for category data buffer
+const DATA = 'data/';
+const LEFT_W = 0;
+const RIGHT_W = 0;
+const TOPBAR_H = 44;
+const CAT_TEX_W = 4096;   // texture width for category data buffer
 const MAX_LABELS = 64;     // max labels per category family for uniform arrays
-const DRAG_THRESH  = 5;
+const DRAG_THRESH = 5;
 const DBL_CLICK_MS = 350;
 
 // ── Vertex shader (GLSL3 — uses gl_VertexID + texelFetch) ───────────────────
 const VERT = /* glsl */`
   out vec3  vColor;
   out float vAlpha;
+  out float vOutline;
 
   uniform float uPointSize;
 
@@ -27,8 +28,9 @@ const VERT = /* glsl */`
   uniform int  uPaletteN;
   uniform int  uCategoryModes[${MAX_LABELS}];
 
-  uniform int  uSecFamilyIdx;  // -1 = inactive
-  uniform int  uSecLabelIdx;
+  uniform int   uSecFamilyIdx;   // -1 = inactive
+  uniform int   uSecLabelIdx;
+  uniform float uSecDimFactor;   // multiplier for secondary-filtered points (default 1.0)
 
   void main() {
     int flatIdx = uActiveFamilyIdx * uN + gl_VertexID;
@@ -36,19 +38,21 @@ const VERT = /* glsl */`
     int ty = flatIdx / ${CAT_TEX_W};
     int catId = int(texelFetch(uCategoryTex, ivec2(tx, ty), 0).r);
 
-    int mode = uCategoryModes[catId];
+    int   mode      = uCategoryModes[catId];
+    float dimFactor = 1.0;
 
-    // Secondary filter: dim points in the primary selection that don't match
+    // Secondary filter: scale down points in the primary selection that don't match
     if (uSecFamilyIdx >= 0 && mode == 0) {
       int secFlat  = uSecFamilyIdx * uN + gl_VertexID;
       int secCatId = int(texelFetch(uCategoryTex, ivec2(secFlat % ${CAT_TEX_W}, secFlat / ${CAT_TEX_W}), 0).r);
-      if (secCatId != uSecLabelIdx) mode = 2;
+      if (secCatId != uSecLabelIdx) dimFactor = uSecDimFactor;
     }
 
     // mode 0 = normal, 1 = light, 2 = dark/desaturated — never hidden
     vAlpha = 1.0;
     int paletteIdx = mode * uPaletteN + catId % uPaletteN;
-    vColor = uPalette[paletteIdx];
+    vColor = uPalette[paletteIdx] * dimFactor;
+    vOutline = (dimFactor > uSecDimFactor) && (mode == 0) ? 0.4 : 0.0;
 
     vec4 mvPos    = modelViewMatrix * vec4(position, 1.0);
     gl_Position   = projectionMatrix * mvPos;
@@ -61,6 +65,7 @@ const VERT = /* glsl */`
 const FRAG = /* glsl */`
   in  vec3  vColor;
   in  float vAlpha;
+  in float vOutline;
   out vec4  fragColor;
 
   uniform float uOutline;
@@ -73,7 +78,7 @@ const FRAG = /* glsl */`
     vec3 col = vColor;
     if (uOutline > 0.5 && dist > 0.38) {
       float t = smoothstep(0.38, 0.48, dist);
-      col = mix(col, vec3(0.0), t * 0.85);
+      col = mix(col, vec3(vOutline), t * 0.85);
     }
     fragColor = vec4(col, 1.0);
   }
@@ -84,16 +89,16 @@ let N = 0;
 let meta = null;
 let posArr = null;          // Float32Array(N*3) — positions for raycasting
 let recipeIds = null;       // Uint32Array(N)
-let chunkIds  = null;       // Uint16Array(N)
+let chunkIds = null;       // Uint16Array(N)
 let categoryData = null;    // Uint32Array(N * N_families) — packed category IDs
 let alphaCache = null;      // Float32Array(N) — 0=hidden, 1=visible (for raycasting)
 
-const chunkCache   = new Map(); // chunkId -> {recipe_id_str: {...}}
+const chunkCache = new Map(); // chunkId -> {recipe_id_str: {...}}
 const pendingChunks = new Map(); // chunkId -> Promise<data> (in-flight fetches)
 
-const recipeMetricsCache   = new Map(); // shard -> {rid_str: metrics | {}}
+const recipeMetricsCache = new Map(); // shard -> {rid_str: metrics | {}}
 const categoryMetricsCache = new Map(); // filename -> data
-let   categoryMetricsIndex = null;      // {family: {label: filename}}
+let categoryMetricsIndex = null;      // {family: {label: filename}}
 
 // Multi-label highlight — when set, overrides highlightedLabelIdx.
 // null = use single-label system; Set<number> = active set of label indices.
@@ -106,21 +111,21 @@ const RECIPE_TABS = [
   { id: 'reviews', label: 'Reviews / Year' },
 ];
 const CLUSTER_TABS = [
-  { id: 'reviews',       label: 'Reviews / Year' },
-  { id: 'ratings',       label: 'Ratings' },
-  { id: 'minutes',       label: 'Cook Time' },
+  { id: 'reviews', label: 'Reviews / Year' },
+  { id: 'ratings', label: 'Ratings' },
+  { id: 'minutes', label: 'Cook Time' },
   { id: 'n_ingredients', label: 'N Ingredients' },
-  { id: 'n_steps',       label: 'N Steps' },
-  { id: 'n_ratings',     label: 'N Ratings' },
-  { id: 'submitted',     label: 'Submitted' },
-  { id: 'cuisines',      label: 'Cuisine' },
-  { id: 'meal_types',    label: 'Meal Type' },
+  { id: 'n_steps', label: 'N Steps' },
+  { id: 'n_ratings', label: 'N Ratings' },
+  { id: 'submitted', label: 'Submitted' },
+  { id: 'cuisines', label: 'Cuisine' },
+  { id: 'meal_types', label: 'Meal Type' },
 ];
 
-let activeRecipeTab    = 'ratings';
-let activeClusterTab   = 'reviews';
+let activeRecipeTab = 'ratings';
+let activeClusterTab = 'reviews';
 let currentClusterFamily = null;
-let currentClusterLabel  = null;
+let currentClusterLabel = null;
 
 let renderer, scene, camera, controls;
 let geometry, pointsMesh;
@@ -130,8 +135,8 @@ let activeFamilyIdx = 0;
 let categoryModes = new Int32Array(MAX_LABELS).fill(0);
 let highlightedLabelIdx = -1; // -1 = none
 
-let lockedIdx  = -1;
-let hoverIdx   = -1;   // currently hovered point index
+let lockedIdx = -1;
+let hoverIdx = -1;   // currently hovered point index
 let pointerIsDown = false;
 let mouseDownX = 0, mouseDownY = 0;
 let lastClickTime = 0;
@@ -140,21 +145,21 @@ let camAnim = null;
 // Computed from coord_bounds after meta loads — used by camera presets
 let dataCenterVec = new THREE.Vector3(0, 0, 0);
 let defaultCamPos = new THREE.Vector3(0.8, 0.6, 2.0);
-let dataExtent    = 14;  // approximate, updated on boot
+let dataExtent = 14;  // approximate, updated on boot
 
 let appMode = 'story';  // 'story' | 'explore'
 let storyData = null;
 let currentStep = 0;
 
 const raycaster = new THREE.Raycaster();
-const mouse     = new THREE.Vector2();
+const mouse = new THREE.Vector2();
 
 // ── Color helpers ─────────────────────────────────────────────────────────────
 function hexToVec3(hex) {
   return [
-    parseInt(hex.slice(1,3), 16) / 255,
-    parseInt(hex.slice(3,5), 16) / 255,
-    parseInt(hex.slice(5,7), 16) / 255,
+    parseInt(hex.slice(1, 3), 16) / 255,
+    parseInt(hex.slice(3, 5), 16) / 255,
+    parseInt(hex.slice(5, 7), 16) / 255,
   ];
 }
 
@@ -175,12 +180,12 @@ function buildPalette(hexColors) {
   // flat array: [normal×n, light×n, dark×n]
   const flat = new Float32Array(n * 3 * 3);
   hexColors.forEach((hex, i) => {
-    const base  = hexToVec3(hex);
+    const base = hexToVec3(hex);
     const light = lighten(base);
-    const dark  = darken(base);
-    flat.set(base,  i * 3);
+    const dark = darken(base);
+    flat.set(base, i * 3);
     flat.set(light, (n + i) * 3);
-    flat.set(dark,  (n * 2 + i) * 3);
+    flat.set(dark, (n * 2 + i) * 3);
   });
   return { flat, n };
 }
@@ -188,9 +193,9 @@ function buildPalette(hexColors) {
 // ── Category texture ──────────────────────────────────────────────────────────
 function buildCategoryTexture(families) {
   const nFamilies = families.length;
-  const totalEls  = N * nFamilies;
-  const texH      = Math.ceil(totalEls / CAT_TEX_W);
-  const texData   = new Uint32Array(CAT_TEX_W * texH); // zero-padded
+  const totalEls = N * nFamilies;
+  const texH = Math.ceil(totalEls / CAT_TEX_W);
+  const texData = new Uint32Array(CAT_TEX_W * texH); // zero-padded
 
   families.forEach((arr, fi) => {
     for (let i = 0; i < N; i++) {
@@ -201,18 +206,18 @@ function buildCategoryTexture(families) {
   const tex = new THREE.DataTexture(texData, CAT_TEX_W, texH,
     THREE.RedIntegerFormat, THREE.UnsignedIntType);
   tex.internalFormat = 'R32UI';
-  tex.needsUpdate    = true;
+  tex.needsUpdate = true;
   return tex;
 }
 
 // ── Palette color lookup ──────────────────────────────────────────────────────
 function getPaletteRgb(labelIdx) {
-  const palN    = uniforms.uPaletteN?.value ?? 1;
+  const palN = uniforms.uPaletteN?.value ?? 1;
   const palette = uniforms.uPalette?.value;
   if (!palette) return [78, 121, 167];
   const base = (labelIdx % palN) * 3;
   return [
-    Math.round(palette[base]     * 255),
+    Math.round(palette[base] * 255),
     Math.round(palette[base + 1] * 255),
     Math.round(palette[base + 2] * 255),
   ];
@@ -233,7 +238,7 @@ async function decompressJson(ab) {
 function pad(i) { return String(i).padStart(6, '0'); }
 
 function loadChunk(chunkId) {
-  if (chunkCache.has(chunkId))   return Promise.resolve(chunkCache.get(chunkId));
+  if (chunkCache.has(chunkId)) return Promise.resolve(chunkCache.get(chunkId));
   if (pendingChunks.has(chunkId)) return pendingChunks.get(chunkId);
 
   const promise = (async () => {
@@ -244,7 +249,7 @@ function loadChunk(chunkId) {
       chunkCache.set(chunkId, data);
       return data;
     } catch { return null; }
-    finally   { pendingChunks.delete(chunkId); }
+    finally { pendingChunks.delete(chunkId); }
   })();
 
   pendingChunks.set(chunkId, promise);
@@ -266,20 +271,20 @@ function initScene(palette) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(w, h);
 
-  scene  = new THREE.Scene();
+  scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(60, w / h, 0.001, 1000);
   camera.position.copy(defaultCamPos);
 
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
-  controls.minDistance   = 0.05;
-  controls.maxDistance   = dataExtent * 6;
+  controls.minDistance = 0.05;
+  controls.maxDistance = dataExtent * 6;
   controls.target.copy(dataCenterVec);
   controls.update();
 
   geometry = new THREE.BufferGeometry();
-  geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0,0,0), 1000);
+  geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1000);
 
   const posAttr = new THREE.BufferAttribute(posArr, 3);
   posAttr.usage = THREE.StaticDrawUsage;
@@ -299,24 +304,25 @@ function initScene(palette) {
   catTexture = buildCategoryTexture(families);
 
   uniforms = {
-    uPointSize:      { value: 4.0 },
-    uOutline:        { value: 1.0 },
-    uCategoryTex:    { value: catTexture },
-    uActiveFamilyIdx:{ value: 0 },
-    uN:              { value: N },
-    uPalette:        { value: palette.flat },
-    uPaletteN:       { value: palette.n },
-    uCategoryModes:  { value: Array.from(categoryModes) },
-    uSecFamilyIdx:   { value: -1 },
-    uSecLabelIdx:    { value: 0  },
+    uPointSize: { value: 4.0 },
+    uOutline: { value: 1.0 },
+    uCategoryTex: { value: catTexture },
+    uActiveFamilyIdx: { value: 0 },
+    uN: { value: N },
+    uPalette: { value: palette.flat },
+    uPaletteN: { value: palette.n },
+    uCategoryModes: { value: Array.from(categoryModes) },
+    uSecFamilyIdx: { value: -1 },
+    uSecLabelIdx: { value: 0 },
+    uSecDimFactor: { value: 1.0 },
   };
 
   const mat = new THREE.ShaderMaterial({
-    glslVersion:    THREE.GLSL3,
-    vertexShader:   VERT,
+    glslVersion: THREE.GLSL3,
+    vertexShader: VERT,
     fragmentShader: FRAG,
     uniforms,
-    depthTest:  true,
+    depthTest: true,
     depthWrite: true,
   });
 
@@ -328,9 +334,9 @@ function initScene(palette) {
 
   // UI wiring — elements may be absent if their panel is commented out in HTML
   document.getElementById('fc-reset')?.addEventListener('click', () => setCameraPreset('reset'));
-  document.getElementById('fc-top')?.addEventListener('click',   () => setCameraPreset('top'));
+  document.getElementById('fc-top')?.addEventListener('click', () => setCameraPreset('top'));
   document.getElementById('fc-front')?.addEventListener('click', () => setCameraPreset('front'));
-  document.getElementById('fc-side')?.addEventListener('click',  () => setCameraPreset('side'));
+  document.getElementById('fc-side')?.addEventListener('click', () => setCameraPreset('side'));
 
   const SIZE_MULTIPLIERS = [0.25, 0.5, 1.0, 2.0];
   const sizeSlider = document.getElementById('fc-size');
@@ -341,9 +347,9 @@ function initScene(palette) {
   });
 
   window.addEventListener('resize', onResize);
-  renderer.domElement.addEventListener('pointerdown',  onPointerDown);
-  renderer.domElement.addEventListener('pointermove',  onPointerMove);
-  renderer.domElement.addEventListener('pointerup',    onPointerUp);
+  renderer.domElement.addEventListener('pointerdown', onPointerDown);
+  renderer.domElement.addEventListener('pointermove', onPointerMove);
+  renderer.domElement.addEventListener('pointerup', onPointerUp);
   renderer.domElement.addEventListener('pointerleave', onPointerLeave);
 
   animate();
@@ -351,7 +357,7 @@ function initScene(palette) {
 
 // ── Category mode management ──────────────────────────────────────────────────
 function setHighlightLabel(labelIdx) {
-  highlightLabelSet   = null;
+  highlightLabelSet = null;
   highlightedLabelIdx = labelIdx;
   const nLabels = meta.categories[activeFamilyIdx].labels.length;
   for (let i = 0; i < MAX_LABELS; i++) {
@@ -394,14 +400,27 @@ function applyIntersectionHighlight(secondaryFamName, secondaryLabel) {
   if (secFamIdx < 0) return;
   const secLabelIdx = meta.categories[secFamIdx].labels.indexOf(secondaryLabel);
   if (secLabelIdx < 0) return;
-  savedIntersectionState = true;
+
+  if (!savedIntersectionState) {
+    savedIntersectionState = { alpha: alphaCache.slice() };
+  }
+
   uniforms.uSecFamilyIdx.value = secFamIdx;
-  uniforms.uSecLabelIdx.value  = secLabelIdx;
+  uniforms.uSecLabelIdx.value = secLabelIdx;
+  uniforms.uSecDimFactor.value = 0.55;
+
+  // Restrict raycasting to the intersection subset
+  const secData = getCategoryFamilyData(secFamIdx);
+  for (let i = 0; i < N; i++) {
+    alphaCache[i] = savedIntersectionState.alpha[i] > 0 && secData[i] === secLabelIdx ? 1.0 : 0.0;
+  }
 }
 
 function restoreIntersectionHighlight() {
   if (!savedIntersectionState) return;
   uniforms.uSecFamilyIdx.value = -1;
+  uniforms.uSecDimFactor.value = 1.0;
+  alphaCache.set(savedIntersectionState.alpha);
   savedIntersectionState = null;
 }
 
@@ -411,7 +430,7 @@ function setActiveFamily(idx) {
   highlightLabelSet = null;
   categoryModes.fill(0);
   uniforms.uActiveFamilyIdx.value = idx;
-  uniforms.uCategoryModes.value   = Array.from(categoryModes);
+  uniforms.uCategoryModes.value = Array.from(categoryModes);
   alphaCache.fill(1.0);
   renderCategoryList();
 }
@@ -424,22 +443,22 @@ function getCategoryFamilyData(familyIdx) {
 
 // ── Progress ──────────────────────────────────────────────────────────────────
 function showProgress(pct, label) {
-  document.getElementById('progress-wrap').style.display  = 'block';
+  document.getElementById('progress-wrap').style.display = 'block';
   document.getElementById('progress-label').style.display = 'block';
-  document.getElementById('progress-bar').style.width     = `${pct}%`;
-  document.getElementById('progress-label').textContent   = label;
+  document.getElementById('progress-bar').style.width = `${pct}%`;
+  document.getElementById('progress-label').textContent = label;
 }
 function hideProgress() {
-  document.getElementById('progress-wrap').style.display  = 'none';
+  document.getElementById('progress-wrap').style.display = 'none';
   document.getElementById('progress-label').style.display = 'none';
 }
 
 // ── Tooltip ───────────────────────────────────────────────────────────────────
 function worldToScreen(i) {
   const i3 = i * 3;
-  const v  = new THREE.Vector3(posArr[i3], posArr[i3+1], posArr[i3+2]).project(camera);
-  const w  = window.innerWidth - LEFT_W - RIGHT_W;
-  const h  = window.innerHeight - TOPBAR_H;
+  const v = new THREE.Vector3(posArr[i3], posArr[i3 + 1], posArr[i3 + 2]).project(camera);
+  const w = window.innerWidth - LEFT_W - RIGHT_W;
+  const h = window.innerHeight - TOPBAR_H;
   return { x: (v.x + 1) / 2 * w + LEFT_W, y: (-v.y + 1) / 2 * h + TOPBAR_H };
 }
 
@@ -464,9 +483,9 @@ function positionHoverTip(idx) {
   top = Math.max(TOPBAR_H + 4, Math.min(top, window.innerHeight - th - 4));
 
   tip.style.left = `${Math.round(left)}px`;
-  tip.style.top  = `${Math.round(top)}px`;
+  tip.style.top = `${Math.round(top)}px`;
 
-  const arrow  = document.getElementById('hover-tip-arrow');
+  const arrow = document.getElementById('hover-tip-arrow');
   const arrowY = Math.max(8, Math.min(sp.y - top - 7, th - 16));
   arrow.style.top = `${Math.round(arrowY)}px`;
   arrow.className = `arrow-${arrowSide}`;
@@ -494,9 +513,9 @@ function populateHoverTip(idx, recipe) {
   // All category pills in a single row, active family gets outline ring
   tagsEl.innerHTML = '';
   meta.categories.forEach((cat, fi) => {
-    const famData  = getCategoryFamilyData(fi);
+    const famData = getCategoryFamilyData(fi);
     const labelIdx = famData[idx];
-    const label    = cat.labels[labelIdx];
+    const label = cat.labels[labelIdx];
     if (!label) return;
     const [r, g, b] = getPaletteRgb(labelIdx);
     const tr = Math.round(r * 0.45 + 255 * 0.55);
@@ -505,17 +524,17 @@ function populateHoverTip(idx, recipe) {
     const span = document.createElement('span');
     span.className = 'ht-tag' + (fi === activeFamilyIdx ? ' active-family' : '');
     span.textContent = label;
-    span.style.background  = `rgba(${r},${g},${b},0.35)`;
+    span.style.background = `rgba(${r},${g},${b},0.35)`;
     span.style.borderColor = `rgba(${r},${g},${b},0.80)`;
-    span.style.color       = `rgb(${tr},${tg},${tb})`;
+    span.style.color = `rgb(${tr},${tg},${tb})`;
     tagsEl.appendChild(span);
   });
 
   // Meta line: date + cook time + steps
   const parts = [];
   if (recipe.submitted) parts.push(recipe.submitted.slice(0, 7)); // YYYY-MM
-  if (recipe.minutes)   parts.push(`${recipe.minutes} min`);
-  if (recipe.n_steps)   parts.push(`${recipe.n_steps} steps`);
+  if (recipe.minutes) parts.push(`${recipe.minutes} min`);
+  if (recipe.n_steps) parts.push(`${recipe.n_steps} steps`);
   if (recipe.avg_rating != null) parts.push(`★ ${recipe.avg_rating.toFixed(1)}`);
   metaEl.textContent = parts.join(' · ');
 
@@ -524,9 +543,9 @@ function populateHoverTip(idx, recipe) {
 
 function showHoverTip(idx) {
   hoverIdx = idx;
-  const tip     = document.getElementById('hover-tip');
+  const tip = document.getElementById('hover-tip');
   const chunkId = chunkIds[idx];
-  const chunk   = chunkCache.get(chunkId);
+  const chunk = chunkCache.get(chunkId);
 
   populateHoverTip(idx, chunk?.[String(recipeIds[idx])] ?? null);
   tip.style.display = 'block';
@@ -551,8 +570,8 @@ const _rayPt = new THREE.Vector3();
 
 function raycastBest(e) {
   const rc = renderer.domElement.getBoundingClientRect();
-  mouse.x  =  ((e.clientX - rc.left) / rc.width)  * 2 - 1;
-  mouse.y  = -((e.clientY - rc.top)  / rc.height) * 2 + 1;
+  mouse.x = ((e.clientX - rc.left) / rc.width) * 2 - 1;
+  mouse.y = -((e.clientY - rc.top) / rc.height) * 2 + 1;
   raycaster.setFromCamera(mouse, camera);
   const dist = camera.position.distanceTo(controls.target);
   raycaster.params.Points = { threshold: Math.max(0.01, dist * 0.02) };
@@ -605,7 +624,7 @@ function onPointerUp(e) {
     if (idx >= 0) {
       // Double-click: isolate the category of this point
       const famData = getCategoryFamilyData(activeFamilyIdx);
-      const catId   = famData[idx];
+      const catId = famData[idx];
       if (highlightedLabelIdx === catId) {
         setHighlightLabel(-1);
         showExploreDefault();
@@ -641,17 +660,17 @@ function onPointerLeave() {
 // ── Camera ────────────────────────────────────────────────────────────────────
 const CAM_BACK = new THREE.Vector3(0, 0, 1); // camera looks down local -Z in Three.js
 const MS_PER_RAD = 350;
-const MS_MIN     = 200;
-const MS_MAX     = 900;
+const MS_MIN = 200;
+const MS_MAX = 900;
 
 function quatFromLookAt(from, to) {
   const lookDir = to.clone().sub(from).normalize();
-  const m = new THREE.Matrix4().lookAt(new THREE.Vector3(0,0,0), lookDir, new THREE.Vector3(0,1,0));
+  const m = new THREE.Matrix4().lookAt(new THREE.Vector3(0, 0, 0), lookDir, new THREE.Vector3(0, 1, 0));
   return new THREE.Quaternion().setFromRotationMatrix(m);
 }
 
-function quatFromLookDir(lookDir, up = new THREE.Vector3(0,1,0)) {
-  const m = new THREE.Matrix4().lookAt(new THREE.Vector3(0,0,0), lookDir.clone().normalize(), up);
+function quatFromLookDir(lookDir, up = new THREE.Vector3(0, 1, 0)) {
+  const m = new THREE.Matrix4().lookAt(new THREE.Vector3(0, 0, 0), lookDir.clone().normalize(), up);
   return new THREE.Quaternion().setFromRotationMatrix(m);
 }
 
@@ -662,15 +681,15 @@ function quatFromLookDir(lookDir, up = new THREE.Vector3(0,1,0)) {
  * @param {THREE.Vector3}    toTarget - orbit target point
  */
 function animateCameraTo(toQ, toDist, toTarget) {
-  const fromQ      = camera.quaternion.clone();
-  const fromDist   = camera.position.distanceTo(controls.target);
+  const fromQ = camera.quaternion.clone();
+  const fromDist = camera.position.distanceTo(controls.target);
   const fromTarget = controls.target.clone();
-  const t0         = performance.now();
+  const t0 = performance.now();
 
   // Duration proportional to rotation angle — fast small moves, longer large ones
   const cosHalf = Math.abs(fromQ.dot(toQ));
-  const angle   = 2 * Math.acos(Math.min(1, cosHalf));
-  const ms      = Math.max(MS_MIN, Math.min(MS_MAX, angle * MS_PER_RAD));
+  const angle = 2 * Math.acos(Math.min(1, cosHalf));
+  const ms = Math.max(MS_MIN, Math.min(MS_MAX, angle * MS_PER_RAD));
 
   camAnim = (now) => {
     const t = Math.min((now - t0) / ms, 1);
@@ -680,7 +699,7 @@ function animateCameraTo(toQ, toDist, toTarget) {
     const q = fromQ.clone().slerp(toQ, e);
 
     // Lerp distance and target separately
-    const dist   = fromDist + (toDist - fromDist) * e;
+    const dist = fromDist + (toDist - fromDist) * e;
     const target = fromTarget.clone().lerp(toTarget, e);
 
     // Reconstruct position from orientation and distance
@@ -707,10 +726,10 @@ function animateCameraTo(toQ, toDist, toTarget) {
 
 /** Animate from a story-step camera object {position, target}. */
 function animateCameraToPosition(pos, target) {
-  const posVec    = new THREE.Vector3(...pos);
+  const posVec = new THREE.Vector3(...pos);
   const targetVec = new THREE.Vector3(...target);
-  const q         = quatFromLookAt(posVec, targetVec);
-  const dist      = posVec.distanceTo(targetVec);
+  const q = quatFromLookAt(posVec, targetVec);
+  const dist = posVec.distanceTo(targetVec);
   animateCameraTo(q, dist, targetVec);
 }
 
@@ -720,19 +739,19 @@ function setCameraPreset(preset) {
   let q, dist;
   switch (preset) {
     case 'top':
-      q    = quatFromLookDir(new THREE.Vector3(0, -1, -0.00001), new THREE.Vector3(0, 0, -1));
+      q = quatFromLookDir(new THREE.Vector3(0, -1, -0.00001), new THREE.Vector3(0, 0, -1));
       dist = d;
       break;
     case 'front':
-      q    = quatFromLookDir(new THREE.Vector3(0, 0, -1));
+      q = quatFromLookDir(new THREE.Vector3(0, 0, -1));
       dist = d;
       break;
     case 'side':
-      q    = quatFromLookDir(new THREE.Vector3(-1, 0, 0));
+      q = quatFromLookDir(new THREE.Vector3(-1, 0, 0));
       dist = d;
       break;
     default: // reset
-      q    = quatFromLookAt(defaultCamPos, c);
+      q = quatFromLookAt(defaultCamPos, c);
       dist = defaultCamPos.distanceTo(c);
       break;
   }
@@ -780,8 +799,8 @@ function initRightPanel() {
 }
 
 function renderCategoryList() {
-  const listEl  = document.getElementById('category-list');
-  const family  = meta.categories[activeFamilyIdx];
+  const listEl = document.getElementById('category-list');
+  const family = meta.categories[activeFamilyIdx];
   const famData = getCategoryFamilyData(activeFamilyIdx);
 
   // Count per label
@@ -792,10 +811,10 @@ function renderCategoryList() {
   }
 
   // Determine palette hex for this label
-  const palette    = uniforms.uPalette.value;
-  const paletteN   = uniforms.uPaletteN.value;
+  const palette = uniforms.uPalette.value;
+  const paletteN = uniforms.uPaletteN.value;
 
-  const activeSet  = highlightLabelSet ?? (highlightedLabelIdx >= 0 ? new Set([highlightedLabelIdx]) : new Set());
+  const activeSet = highlightLabelSet ?? (highlightedLabelIdx >= 0 ? new Set([highlightedLabelIdx]) : new Set());
   const hasHighlight = activeSet.size > 0;
 
   listEl.innerHTML = '';
@@ -805,13 +824,13 @@ function renderCategoryList() {
     row.className = 'cat-row' + (isActive ? ' active' : '');
 
     const palBase = labelIdx % paletteN;
-    const r = Math.round(palette[palBase * 3]     * 255);
+    const r = Math.round(palette[palBase * 3] * 255);
     const g = Math.round(palette[palBase * 3 + 1] * 255);
     const b = Math.round(palette[palBase * 3 + 2] * 255);
     const hex = `rgb(${r},${g},${b})`;
 
     const dot = document.createElement('span');
-    dot.className        = 'cat-dot';
+    dot.className = 'cat-dot';
     dot.style.background = hex;
 
     const nameEl = document.createElement('span');
@@ -819,7 +838,7 @@ function renderCategoryList() {
     nameEl.textContent = label;
 
     const countEl = document.createElement('span');
-    countEl.className   = 'cat-count';
+    countEl.className = 'cat-count';
     countEl.textContent = counts[labelIdx].toLocaleString();
 
     row.appendChild(dot);
@@ -843,14 +862,14 @@ function renderCategoryList() {
 function showExploreDefault() {
   restoreIntersectionHighlight();
   document.getElementById('explore-default').style.display = 'block';
-  document.getElementById('explore-recipe').style.display  = 'none';
+  document.getElementById('explore-recipe').style.display = 'none';
   document.getElementById('explore-cluster').style.display = 'none';
   hideChartPanel();
 }
 
 function showRecipeInfo(idx) {
   document.getElementById('explore-default').style.display = 'none';
-  document.getElementById('explore-recipe').style.display  = 'block';
+  document.getElementById('explore-recipe').style.display = 'block';
   document.getElementById('explore-cluster').style.display = 'none';
 
   renderChartTabs('recipe-chart-tabs', RECIPE_TABS, activeRecipeTab, tabId => {
@@ -862,7 +881,7 @@ function showRecipeInfo(idx) {
 
   // Show placeholder immediately, fill in async
   document.getElementById('recipe-name').textContent = `Recipe #${recipeIds[idx]}`;
-  document.getElementById('recipe-tags').innerHTML   = '';
+  document.getElementById('recipe-tags').innerHTML = '';
   document.getElementById('recipe-stats').textContent = 'Loading…';
   document.getElementById('recipe-ingredients').textContent = '';
   document.getElementById('recipe-description').textContent = '';
@@ -875,27 +894,27 @@ function showRecipeInfo(idx) {
     const tagsEl = document.getElementById('recipe-tags');
     tagsEl.innerHTML = '';
     meta.categories.forEach((cat, fi) => {
-      const famData  = getCategoryFamilyData(fi);
+      const famData = getCategoryFamilyData(fi);
       const labelIdx = famData[idx];
-      const label    = cat.labels[labelIdx] ?? '';
+      const label = cat.labels[labelIdx] ?? '';
       if (!label) return;
       const [r, g, b] = getPaletteRgb(labelIdx);
       const tr = Math.round(r * 0.45 + 255 * 0.55);
       const tg = Math.round(g * 0.45 + 255 * 0.55);
       const tb = Math.round(b * 0.45 + 255 * 0.55);
       const tag = document.createElement('span');
-      tag.className        = 'recipe-tag';
-      tag.textContent      = label;
-      tag.style.background  = `rgba(${r},${g},${b},0.35)`;
+      tag.className = 'recipe-tag';
+      tag.textContent = label;
+      tag.style.background = `rgba(${r},${g},${b},0.35)`;
       tag.style.borderColor = `rgba(${r},${g},${b},0.80)`;
-      tag.style.color       = `rgb(${tr},${tg},${tb})`;
+      tag.style.color = `rgb(${tr},${tg},${tb})`;
       tagsEl.appendChild(tag);
     });
 
     const stats = [];
     if (r.avg_rating != null) stats.push(`★ ${r.avg_rating.toFixed(1)} (${r.n_ratings} ratings)`);
-    if (r.minutes)      stats.push(`${r.minutes} min`);
-    if (r.n_steps)      stats.push(`${r.n_steps} steps`);
+    if (r.minutes) stats.push(`${r.minutes} min`);
+    if (r.n_steps) stats.push(`${r.n_steps} steps`);
     if (r.n_ingredients) stats.push(`${r.n_ingredients} ingredients`);
     document.getElementById('recipe-stats').textContent = stats.join(' · ');
 
@@ -916,19 +935,19 @@ function showRecipeInfo(idx) {
 function showClusterInfo(labelIdx) {
   if (appMode !== 'explore') return;
   const family = meta.categories[activeFamilyIdx];
-  const label  = family.labels[labelIdx] ?? `Category ${labelIdx}`;
+  const label = family.labels[labelIdx] ?? `Category ${labelIdx}`;
   const famData = getCategoryFamilyData(activeFamilyIdx);
   let count = 0;
   for (let i = 0; i < N; i++) if (famData[i] === labelIdx) count++;
 
   document.getElementById('explore-default').style.display = 'none';
-  document.getElementById('explore-recipe').style.display  = 'none';
+  document.getElementById('explore-recipe').style.display = 'none';
   document.getElementById('explore-cluster').style.display = 'block';
-  document.getElementById('cluster-name').textContent  = label;
+  document.getElementById('cluster-name').textContent = label;
   document.getElementById('cluster-count').textContent = `${count.toLocaleString()} recipes`;
 
   currentClusterFamily = family.name;
-  currentClusterLabel  = label;
+  currentClusterLabel = label;
   renderChartTabs('cluster-chart-tabs', CLUSTER_TABS, activeClusterTab, tabId => {
     activeClusterTab = tabId;
     showClusterChart(currentClusterFamily, currentClusterLabel, tabId);
@@ -996,13 +1015,13 @@ function renderChart(container, config, data) {
   const margin = type === 'beeswarm'
     ? { top: 8, right: 10, bottom: 26, left: 10 }
     : isBinned
-    ? { top: 22, right: 10, bottom: 52, left: 36 }
-    : { top: 8, right: 10, bottom: 26, left: 34 };
+      ? { top: 22, right: 10, bottom: 52, left: 36 }
+      : { top: 8, right: 10, bottom: 26, left: 34 };
   const innerW = W - margin.left - margin.right;
   const innerH = H - margin.top - margin.bottom;
 
   const AXIS_COLOR = 'rgba(255,255,255,0.25)';
-  const BAR_COLOR  = '#4e79a7';
+  const BAR_COLOR = '#4e79a7';
   const TEXT_COLOR = 'rgba(255,255,255,0.72)';
 
   container.innerHTML = '';
@@ -1047,9 +1066,26 @@ function renderChart(container, config, data) {
         .attr('y', d => y(d))
         .attr('height', d => innerH - y(d))
         .attr('fill', (_, i) => config.colors?.[i] ?? BAR_COLOR)
-        .attr('opacity', 0.88);
+        .attr('opacity', 0.88)
+        .attr('stroke', 'none')
+        .attr('stroke-width', 1.5);
 
       if (config.onBarEnter) {
+        let lockedLabel = null;
+
+        const setLocked = lbl => {
+          lockedLabel = lbl;
+          bars.attr('opacity', (_, i) => labels[i] === lbl ? 1.0 : 0.15)
+            .attr('stroke', (_, i) => labels[i] === lbl ? 'rgba(255,255,255,0.72)' : 'none');
+          config.onBarEnter(lbl);
+        };
+
+        const clearLocked = () => {
+          lockedLabel = null;
+          bars.attr('opacity', 0.88).attr('stroke', 'none');
+          config.onBarLeave?.();
+        };
+
         const halfGap = (x.step() - x.bandwidth()) / 2;
         g.selectAll('.bar-hit').data(labels).join('rect')
           .attr('class', 'bar-hit')
@@ -1060,13 +1096,29 @@ function renderChart(container, config, data) {
           .attr('fill', 'transparent')
           .style('cursor', 'pointer')
           .on('mouseover', (_, lbl) => {
-            bars.transition().duration(80)
-              .attr('opacity', (_, i) => labels[i] === lbl ? 1.0 : 0.28);
+            if (lockedLabel) return;
+            bars.attr('opacity', (_, i) => labels[i] === lbl ? 1.0 : 0.28);
             config.onBarEnter(lbl);
           })
           .on('mouseleave', () => {
-            bars.transition().duration(120).attr('opacity', 0.88);
+            if (lockedLabel) return;
+            bars.attr('opacity', 0.88);
             config.onBarLeave?.();
+          })
+          .on('click', (_, lbl) => {
+            if (lockedLabel === lbl) {
+              // Same bar clicked: deselect, resume hover on this bar
+              lockedLabel = null;
+              bars.attr('opacity', (_, i) => labels[i] === lbl ? 1.0 : 0.28)
+                .attr('stroke', 'none');
+              config.onBarEnter(lbl);
+            } else if (lockedLabel) {
+              // Different bar clicked while locked: just deselect
+              clearLocked();
+            } else {
+              // Nothing locked: lock this bar
+              setLocked(lbl);
+            }
           });
       }
 
@@ -1221,7 +1273,7 @@ async function showRecipeChart(recipeId, tabId = activeRecipeTab) {
 
   if (!recipeMetricsCache.has(shard)) {
     try {
-      const ab   = await fetch(`${DATA}recipe_metrics/${shard}.json.gz`).then(r => r.ok ? r.arrayBuffer() : null);
+      const ab = await fetch(`${DATA}recipe_metrics/${shard}.json.gz`).then(r => r.ok ? r.arrayBuffer() : null);
       const data = ab ? await decompressJson(ab) : {};
       recipeMetricsCache.set(shard, data);
     } catch { recipeMetricsCache.set(shard, {}); }
@@ -1274,7 +1326,7 @@ async function showClusterChart(familyName, label, tabId = activeClusterTab) {
 
   if (!categoryMetricsCache.has(filename)) {
     try {
-      const ab   = await fetch(`${DATA}category_metrics/${filename}`).then(r => r.ok ? r.arrayBuffer() : null);
+      const ab = await fetch(`${DATA}category_metrics/${filename}`).then(r => r.ok ? r.arrayBuffer() : null);
       const data = ab ? await decompressJson(ab) : null;
       categoryMetricsCache.set(filename, data);
     } catch { return; }
@@ -1326,13 +1378,13 @@ async function showClusterChart(familyName, label, tabId = activeClusterTab) {
     const counts = labels.map(l => dist[l]);
     const colors = resolveDistColors(tabId, labels);
     const titles = {
-      minutes:       'Cook Time',
+      minutes: 'Cook Time',
       n_ingredients: 'N Ingredients',
-      n_steps:       'N Steps',
-      n_ratings:     'N Ratings',
-      submitted:     'Submitted',
-      cuisines:      'Cuisine',
-      meal_types:    'Meal Type',
+      n_steps: 'N Steps',
+      n_ratings: 'N Ratings',
+      submitted: 'Submitted',
+      cuisines: 'Cuisine',
+      meal_types: 'Meal Type',
     };
     showChartPanel({
       chartType: 'histogram', title: titles[tabId] ?? tabId,
@@ -1430,9 +1482,9 @@ function initStoryPanel() {
 // ── Mode switching ────────────────────────────────────────────────────────────
 function setMode(mode) {
   appMode = mode;
-  document.getElementById('btn-story').classList.toggle('active',   mode === 'story');
+  document.getElementById('btn-story').classList.toggle('active', mode === 'story');
   document.getElementById('btn-explore').classList.toggle('active', mode === 'explore');
-  document.getElementById('story-panel').style.display   = mode === 'story'   ? 'flex' : 'none';
+  document.getElementById('story-panel').style.display = mode === 'story' ? 'flex' : 'none';
   document.getElementById('explore-panel').style.display = mode === 'explore' ? 'flex' : 'none';
 
   document.getElementById('right-column').classList.toggle('story-mode', mode === 'story');
@@ -1456,7 +1508,7 @@ function buildShareUrl() {
   if (appMode === 'story') {
     params.set('step', currentStep);
   } else {
-    const pos    = camera.position;
+    const pos = camera.position;
     const target = controls.target;
     params.set('cam', [pos.x, pos.y, pos.z, target.x, target.y, target.z]
       .map(v => v.toFixed(3)).join(','));
@@ -1470,7 +1522,7 @@ function applyShareState() {
   const hash = location.hash.slice(1);
   if (!hash) return;
   const params = new URLSearchParams(hash);
-  const mode   = params.get('mode') ?? 'story';
+  const mode = params.get('mode') ?? 'story';
 
   if (mode === 'story') {
     const step = Math.max(0, Math.min(
@@ -1513,20 +1565,20 @@ async function boot() {
   ]);
   categoryMetricsIndex = catIdxRes;
 
-  meta      = metaRes;
+  meta = metaRes;
   storyData = storyRes;
-  N         = meta.total;
+  N = meta.total;
 
   const palette = buildPalette(paletteRes);
 
   // Compute data center and extent for camera positioning
-  const b  = meta.coord_bounds;
+  const b = meta.coord_bounds;
   dataCenterVec.set(
     (b.min[0] + b.max[0]) / 2,
     (b.min[1] + b.max[1]) / 2,
     (b.min[2] + b.max[2]) / 2,
   );
-  dataExtent = Math.max(b.max[0]-b.min[0], b.max[1]-b.min[1], b.max[2]-b.min[2]);
+  dataExtent = Math.max(b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]);
   defaultCamPos = new THREE.Vector3(
     dataCenterVec.x,
     dataCenterVec.y + dataExtent * 0.2,
@@ -1546,7 +1598,7 @@ async function boot() {
   showProgress(40, 'Loading attributes…');
 
   // Load and parse attributes.bin.gz
-  const attrRaw    = await fetch(`${DATA}attributes.bin.gz`).then(r => r.arrayBuffer());
+  const attrRaw = await fetch(`${DATA}attributes.bin.gz`).then(r => r.arrayBuffer());
   const attrBuffer = await decompressBuffer(attrRaw);
 
   const dtypeSize = { uint32: 4, uint16: 2, uint8: 1, float32: 4 };
@@ -1556,7 +1608,7 @@ async function boot() {
   const attributes = {};
   let offset = 0;
   for (const attr of meta.attribute_layout) {
-    const sz  = dtypeSize[attr.dtype];
+    const sz = dtypeSize[attr.dtype];
     const Arr = dtypeArray[attr.dtype];
     // Always slice to guarantee alignment — avoids issues when offset is not
     // a multiple of the element size (e.g. float32 after several uint8 blocks).
@@ -1565,11 +1617,11 @@ async function boot() {
   }
 
   recipeIds = attributes['recipe_id'];
-  chunkIds  = attributes['chunk_id'];
+  chunkIds = attributes['chunk_id'];
 
   // Build packed category data: Uint32Array(N * N_families)
   const nFamilies = meta.categories.length;
-  categoryData    = new Uint32Array(N * nFamilies);
+  categoryData = new Uint32Array(N * nFamilies);
   meta.categories.forEach((cat, fi) => {
     const src = attributes[cat.attribute];
     for (let i = 0; i < N; i++) {
@@ -1584,7 +1636,7 @@ async function boot() {
   initRightPanel();
 
   // Mode buttons
-  document.getElementById('btn-story').addEventListener('click',   () => setMode('story'));
+  document.getElementById('btn-story').addEventListener('click', () => setMode('story'));
   document.getElementById('btn-explore').addEventListener('click', () => setMode('explore'));
 
   // About modal
@@ -1600,10 +1652,10 @@ async function boot() {
   });
 
   // Share popup
-  const sharePopup   = document.getElementById('share-popup');
+  const sharePopup = document.getElementById('share-popup');
   const shareUrlInput = document.getElementById('share-url');
-  const shareInclude  = document.getElementById('share-include-view');
-  const plainUrl      = `${location.origin}${location.pathname}`;
+  const shareInclude = document.getElementById('share-include-view');
+  const plainUrl = `${location.origin}${location.pathname}`;
 
   const refreshShareUrl = () => {
     shareUrlInput.value = shareInclude.checked ? buildShareUrl() : plainUrl;
@@ -1641,6 +1693,6 @@ async function boot() {
 boot().catch(e => {
   document.getElementById('progress-label').textContent = `Error: ${e.message}`;
   document.getElementById('progress-label').style.display = 'block';
-  document.getElementById('progress-wrap').style.display  = 'none';
+  document.getElementById('progress-wrap').style.display = 'none';
   console.error(e);
 });
