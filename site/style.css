@@ -456,7 +456,7 @@ html, body {
 .cat-tab:hover         { background: rgba(255,255,255,0.09); color: var(--text-body); }
 .cat-tab.active        { background: rgba(15,15,28,0.88); border-color: rgba(255,255,255,0.12);
                          color: var(--text-primary); border-bottom-color: rgba(15,15,28,0.88); }
-.cat-tab.tab-locked    { opacity: 0.45; cursor: default; color: var(--text-muted); pointer-events: none; }
+.cat-tab.tab-locked    { opacity: 0.45; cursor: default; color: var(--text-muted); }
 .cat-tab.tab-available { border-color: rgba(255,255,255,0.22); color: var(--text-body); }
 
 /* Breadcrumb / filter chip bar */

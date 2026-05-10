@@ -43,8 +43,8 @@ const VERT = /* glsl */`
     float dimFactor = 1.0;
     bool  inL2      = false;
 
-    // Secondary filter: dim non-matching points within L1 selection
-    if (uSecFamilyIdx >= 0 && mode == 0) {
+    // Secondary filter: dim non-matching points within L1 selection (mode 0 = normal, 1 = light)
+    if (uSecFamilyIdx >= 0 && mode <= 1) {
       int secFlat  = uSecFamilyIdx * uN + gl_VertexID;
       int secCatId = int(texelFetch(uCategoryTex, ivec2(secFlat % ${CAT_TEX_W}, secFlat / ${CAT_TEX_W}), 0).r);
       if (secCatId != uSecLabelIdx) dimFactor = uSecDimFactor;
@@ -348,7 +348,7 @@ function setHighlightLabel(labelIdx) {
   const nLabels = meta.categories[activeFamilyIdx].labels.length;
   for (let i = 0; i < MAX_LABELS; i++) {
     if (i >= nLabels) { categoryModes[i] = 0; continue; }
-    categoryModes[i] = (labelIdx < 0 || i === labelIdx) ? 0 : 2;
+    categoryModes[i] = labelIdx < 0 ? 0 : (i === labelIdx ? 1 : 2);
   }
   uniforms.uCategoryModes.value = Array.from(categoryModes);
   if (labelIdx < 0) {
@@ -420,10 +420,15 @@ function setActiveFamily(idx) {
     alphaCache.fill(1.0);
     renderRightPanelChart(idx);
   } else if (filterLevel === 1) {
-    if (idx === activeFamilyIdx) return; // L1 family is locked
-    level2FamilyIdx = idx;
-    const filteredCounts = computeFilteredCounts(idx, activeFamilyIdx, level1LabelIdx);
-    renderRightPanelChart(idx, filteredCounts);
+    if (idx === activeFamilyIdx) {
+      // User clicked back to L1 family tab — show full L1 chart with selection visible
+      level2FamilyIdx = -1;
+      renderRightPanelChart(idx);
+    } else {
+      level2FamilyIdx = idx;
+      const filteredCounts = computeFilteredCounts(idx, activeFamilyIdx, level1LabelIdx);
+      renderRightPanelChart(idx, filteredCounts);
+    }
   } else if (filterLevel === 2) {
     level2FamilyIdx = idx;
     level2LabelIdx = -1;
@@ -803,9 +808,8 @@ function initRightPanel() {
 function updateTabVisualState() {
   document.querySelectorAll('.cat-tab').forEach((btn, i) => {
     btn.classList.remove('tab-locked', 'tab-available');
-    if (filterLevel === 1) {
-      if (i === activeFamilyIdx) btn.classList.add('tab-locked');
-      else btn.classList.add('tab-available');
+    if (filterLevel >= 1 && i !== activeFamilyIdx) {
+      btn.classList.add('tab-available');
     }
   });
 }
@@ -834,12 +838,6 @@ function computeFilteredCounts(familyIdx, l1FamilyIdx, l1LabelIdx) {
   return counts;
 }
 
-function applyL2SecondaryPreview(famIdx, labelIdx) {
-  uniforms.uSecFamilyIdx.value     = famIdx;
-  uniforms.uSecLabelIdx.value      = labelIdx;
-  uniforms.uSecDimFactor.value     = 0.9;   // very subtle dim on hover
-  uniforms.uSecOutlineFactor.value = 0.4;   // faint outline on matching points
-}
 
 function restoreSecondaryAfterHover() {
   if (filterLevel === 2) {
@@ -888,11 +886,13 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
   const barRects = new Map();
   const barStrokes = new Map();
 
+  const isL1Chart = familyIdx === activeFamilyIdx;
   const isSelected = li =>
-    (filterLevel >= 1 && familyIdx === activeFamilyIdx && li === level1LabelIdx) ||
-    (filterLevel >= 2 && familyIdx === level2FamilyIdx && li === level2LabelIdx);
+    (isL1Chart && filterLevel >= 1 && li === level1LabelIdx) ||
+    (!isL1Chart && filterLevel >= 2 && familyIdx === level2FamilyIdx && li === level2LabelIdx);
 
-  const baseOpacity = li => (filterLevel > 0 && !isSelected(li)) ? 0.35 : 0.88;
+  const hasSelection = (isL1Chart && filterLevel >= 1) || (!isL1Chart && filterLevel >= 2);
+  const baseOpacity = li => isSelected(li) ? 1.0 : (hasSelection ? 0.55 : 0.88);
 
   labels.forEach((label, li) => {
     const count = counts[li];
@@ -947,56 +947,47 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
         .style('cursor', isSelected(li) ? 'default' : 'pointer')
         .on('mouseenter', () => {
           if (appMode !== 'explore') return;
-          if (isSelected(li)) return;
+          // Once any selection is made, bars are locked — no hover effects
+          if (filterLevel > 0) return;
 
-          // Bar visuals: dim non-selected, no outline on hover
+          // Bar visuals: hovered = full, others = dimmed
           barRects.forEach((rect, idx) => {
-            if (idx === li) {
-              rect.attr('opacity', 1.0).attr('stroke', 'none');
-            } else if (isSelected(idx)) {
-              rect.attr('opacity', 1.0); // selected keeps its stroke
-            } else {
-              rect.attr('opacity', 0.25);
-            }
+            rect.attr('opacity', idx === li ? 1.0 : 0.28);
           });
 
-          // 3D highlight — only when not at Level 2 (locked)
-          if (filterLevel === 0) {
-            const modes = Array.from(categoryModes);
-            const nLabels = meta.categories[activeFamilyIdx].labels.length;
-            for (let j = 0; j < MAX_LABELS; j++) modes[j] = j < nLabels ? 1 : 0;
-            modes[li] = 0;
-            uniforms.uCategoryModes.value = modes;
-          } else if (filterLevel === 1 && familyIdx !== activeFamilyIdx) {
-            applyL2SecondaryPreview(familyIdx, li);
-          }
-          // filterLevel === 2: keep locked state, no 3D update
+          // 3D: use secondary filter to subtly dim non-hovered (mode stays 0 for all)
+          // Mode 1 is NOT used — that makes everything brighter, not dimmer
+          uniforms.uSecFamilyIdx.value     = activeFamilyIdx;
+          uniforms.uSecLabelIdx.value      = li;
+          uniforms.uSecDimFactor.value     = 0.75;
+          uniforms.uSecOutlineFactor.value = 0.0; // no outline on hover
 
           showPhantomChip(familyIdx, li);
         })
         .on('mouseleave', () => {
           if (appMode !== 'explore') return;
-          if (isSelected(li)) return;
+          if (filterLevel > 0) return;
 
           barRects.forEach((rect, idx) => {
             rect.attr('opacity', baseOpacity(idx))
                 .attr('stroke', isSelected(idx) ? 'rgba(255,255,255,0.65)' : 'none');
           });
 
-          uniforms.uCategoryModes.value = Array.from(categoryModes);
-          restoreSecondaryAfterHover();
+          uniforms.uSecFamilyIdx.value     = -1;
+          uniforms.uSecDimFactor.value     = 1.0;
+          uniforms.uSecOutlineFactor.value = 0.0;
           clearPhantomChip();
         })
         .on('click', () => {
           if (appMode !== 'explore') return;
-          if (filterLevel === 0) {
-            transitionToLevel1(familyIdx, li);
-          } else if (filterLevel === 1) {
+          if (isL1Chart) {
+            // On L1 family chart: clicking changes or clears L1 selection
             if (isSelected(li)) resetToLevel0();
-            else transitionToLevel2(familyIdx, li);
+            else transitionToLevel1(familyIdx, li);
           } else {
-            if (isSelected(li)) resetToLevel1();
-            else transitionToLevel2(familyIdx, li);
+            // On L2 family chart: click selects if nothing selected, click again (any bar) deselects
+            if (filterLevel <= 1) transitionToLevel2(familyIdx, li);
+            else resetToLevel1(); // L2 is locked — any click deselects
           }
         });
     }
@@ -1007,19 +998,11 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
 function transitionToLevel1(familyIdx, labelIdx) {
   filterLevel = 1;
   level1LabelIdx = labelIdx;
-  // activeFamilyIdx stays as the L1 family
+  level2FamilyIdx = -1; // no L2 family selected yet
   setHighlightLabel(labelIdx);
   updateTabVisualState();
-
-  // Switch active tab to first family that isn't the L1 family
-  const l2Idx = meta.categories.findIndex((_, i) => i !== familyIdx);
-  level2FamilyIdx = l2Idx >= 0 ? l2Idx : familyIdx;
-  document.querySelectorAll('.cat-tab').forEach((btn, i) => {
-    btn.classList.toggle('active', i === level2FamilyIdx);
-  });
-
-  const filteredCounts = computeFilteredCounts(level2FamilyIdx, activeFamilyIdx, level1LabelIdx);
-  renderRightPanelChart(level2FamilyIdx, filteredCounts);
+  // Stay on the L1 family chart — user can switch tabs manually for L2
+  renderRightPanelChart(familyIdx);
   renderFilterChips();
 }
 
@@ -1060,7 +1043,6 @@ function resetToLevel0() {
 function resetToLevel1() {
   filterLevel = 1;
   level2LabelIdx = -1;
-  // Clear secondary uniforms, keep L1 highlight
   uniforms.uSecFamilyIdx.value     = -1;
   uniforms.uSecDimFactor.value     = 1.0;
   uniforms.uSecOutlineFactor.value = 0.0;
@@ -1068,8 +1050,14 @@ function resetToLevel1() {
     alphaCache.set(savedIntersectionState.alpha);
     savedIntersectionState = null;
   }
-  const filteredCounts = computeFilteredCounts(level2FamilyIdx, activeFamilyIdx, level1LabelIdx);
-  renderRightPanelChart(level2FamilyIdx, filteredCounts);
+  // Render L2 family chart if one was chosen, otherwise fall back to L1 family chart
+  if (level2FamilyIdx >= 0 && level2FamilyIdx !== activeFamilyIdx) {
+    const filteredCounts = computeFilteredCounts(level2FamilyIdx, activeFamilyIdx, level1LabelIdx);
+    renderRightPanelChart(level2FamilyIdx, filteredCounts);
+  } else {
+    level2FamilyIdx = -1;
+    renderRightPanelChart(activeFamilyIdx);
+  }
   renderFilterChips();
 }
 
