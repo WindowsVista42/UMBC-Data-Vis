@@ -658,13 +658,11 @@ function onPointerUp(e) {
     setLockedIdx(-1);
     hideHoverTip();
     showExploreDefault();
-    if (idx >= 0) {
-      const famData = getCategoryFamilyData(activeFamilyIdx);
-      const catId = famData[idx];
-      if (filterLevel >= 1 && level1LabelIdx === catId) resetToLevel0();
-      else transitionToLevel1(activeFamilyIdx, catId);
-    } else {
+    if (filterLevel >= 1) {
       resetToLevel0();
+    } else if (idx >= 0) {
+      const famData = getCategoryFamilyData(activeFamilyIdx);
+      transitionToLevel1(activeFamilyIdx, famData[idx]);
     }
     return;
   }
@@ -915,7 +913,7 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
   const _ctx = document.createElement('canvas').getContext('2d');
   _ctx.font = '11px "Source Serif 4", serif';
   const maxTextW = Math.max(...labels.map(l => _ctx.measureText(shortenLabel(l)).width));
-  const labelW = Math.ceil(maxTextW) + 20;
+  const labelW = Math.max(60, Math.ceil(maxTextW) + 20);
   const barGap = 6;
   const countPad = 40;
   const barMaxW = W - labelW - barGap - countPad;
@@ -1786,7 +1784,8 @@ function applyStep(step) {
         btn.classList.toggle('active', i === idx);
       });
       const familyName = step.colorBy.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      document.getElementById('story-family-title').textContent = familyName;
+      document.getElementById('right-panel-title').textContent = familyName;
+      document.getElementById('right-panel-subtitle').textContent = step.categorySubtitle || '';
     }
   }
   // Apply highlight — string, array of strings, or null. Family is always colorBy.
@@ -1860,6 +1859,15 @@ function initStoryPanel() {
       applyStep(storyData.steps[currentStep]);
     }
   });
+  document.addEventListener('keydown', e => {
+    if (appMode !== 'story') return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.key === 'ArrowLeft' && currentStep > 0) {
+      currentStep--; applyStep(storyData.steps[currentStep]);
+    } else if (e.key === 'ArrowRight' && currentStep < storyData.steps.length - 1) {
+      currentStep++; applyStep(storyData.steps[currentStep]);
+    }
+  });
   applyStep(storyData.steps[0]);
 }
 
@@ -1881,6 +1889,7 @@ function setMode(mode) {
     hideLeftPanelChart();
     showExploreDefault();
     document.getElementById('btn-randomize').textContent = 'Surprise Me';
+    document.getElementById('right-panel-title').textContent = 'Categories';
     renderFilterChips();
     requestAnimationFrame(() => renderRightPanelChart(activeFamilyIdx));
   } else {
@@ -1890,13 +1899,6 @@ function setMode(mode) {
     document.getElementById('explore-default').style.display = 'none';
     resetToLevel0();
     restoreIntersectionHighlight();
-    const bar = document.getElementById('breadcrumb-bar');
-    bar.innerHTML = '';
-    const lbl = document.createElement('span');
-    lbl.className = 'flavor-text';
-    lbl.innerHTML = 'Controlled by story · Click <button class="inline-link" id="breadcrumb-explore-link">Explore</button> to filter';
-    bar.appendChild(lbl);
-    document.getElementById('breadcrumb-explore-link').addEventListener('click', () => setMode('explore'));
     applyStep(storyData.steps[currentStep]);
   }
 }
