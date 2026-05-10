@@ -164,7 +164,7 @@ function lighten(rgb) {
 }
 
 function darken(rgb) {
-  return [rgb[0] * 0.12 + 0.03, rgb[1] * 0.12 + 0.03, rgb[2] * 0.12 + 0.03];
+  return [rgb[0] * 0.20 + 0.03, rgb[1] * 0.20 + 0.03, rgb[2] * 0.20 + 0.03];
 }
 
 function buildPalette(hexColors) {
@@ -200,6 +200,16 @@ function buildCategoryTexture(families) {
   tex.internalFormat = 'R32UI';
   tex.needsUpdate = true;
   return tex;
+}
+
+// ── Label display names ───────────────────────────────────────────────────────
+const LABEL_OVERRIDES = {
+  'northeastern-united-states': 'northeastern-us',
+  'southern-united-states':     'southern-us',
+  'southwestern-united-states': 'southwestern-us',
+};
+function shortenLabel(label) {
+  return LABEL_OVERRIDES[label] ?? label;
 }
 
 // ── Palette color lookup ──────────────────────────────────────────────────────
@@ -348,7 +358,7 @@ function setHighlightLabel(labelIdx) {
   const nLabels = meta.categories[activeFamilyIdx].labels.length;
   for (let i = 0; i < MAX_LABELS; i++) {
     if (i >= nLabels) { categoryModes[i] = 0; continue; }
-    categoryModes[i] = labelIdx < 0 ? 0 : (i === labelIdx ? 1 : 2);
+    categoryModes[i] = (labelIdx < 0 || i === labelIdx) ? 0 : 2;
   }
   uniforms.uCategoryModes.value = Array.from(categoryModes);
   if (labelIdx < 0) {
@@ -843,7 +853,7 @@ function restoreSecondaryAfterHover() {
   if (filterLevel === 2) {
     uniforms.uSecFamilyIdx.value     = level2FamilyIdx;
     uniforms.uSecLabelIdx.value      = level2LabelIdx;
-    uniforms.uSecDimFactor.value     = 0.65;  // noticeable but not harsh
+    uniforms.uSecDimFactor.value     = 0.80;  // noticeable but not harsh
     uniforms.uSecOutlineFactor.value = 1.0;   // full white outline when locked
   } else {
     uniforms.uSecFamilyIdx.value     = -1;
@@ -863,7 +873,7 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
 
   const W = container.offsetWidth || 300;
   const rowH = 24;
-  const labelW = Math.min(Math.floor(W * 0.42), 140);
+  const labelW = Math.min(Math.floor(W * 0.34), 112);
   const barGap = 6;
   const countPad = 40;
   const barMaxW = W - labelW - barGap - countPad;
@@ -892,7 +902,7 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
     (!isL1Chart && filterLevel >= 2 && familyIdx === level2FamilyIdx && li === level2LabelIdx);
 
   const hasSelection = (isL1Chart && filterLevel >= 1) || (!isL1Chart && filterLevel >= 2);
-  const baseOpacity = li => isSelected(li) ? 1.0 : (hasSelection ? 0.55 : 0.88);
+  const baseOpacity = li => isSelected(li) ? 1.0 : (hasSelection ? 0.28 : 0.88);
 
   labels.forEach((label, li) => {
     const count = counts[li];
@@ -912,7 +922,7 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
       .attr('font-size', '11px').attr('font-family', FONT)
       .attr('fill', sel ? TEXT_BODY : TEXT_DIM)
       .attr('font-weight', sel ? '600' : '400')
-      .text(label);
+      .text(shortenLabel(label));
 
     // Bar
     if (barW > 0) {
@@ -947,32 +957,46 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
         .style('cursor', isSelected(li) ? 'default' : 'pointer')
         .on('mouseenter', () => {
           if (appMode !== 'explore') return;
-          // Once any selection is made, bars are locked — no hover effects
-          if (filterLevel > 0) return;
+          // L2 locked → no hover anywhere
+          if (filterLevel >= 2) return;
+          // L1 selected and viewing L1 chart → bars are locked, no hover
+          if (filterLevel === 1 && isL1Chart) return;
 
-          // Bar visuals: hovered = full, others = dimmed
+          // Bar visuals
           barRects.forEach((rect, idx) => {
-            rect.attr('opacity', idx === li ? 1.0 : 0.28);
+            if (idx === li) rect.attr('opacity', 1.0).attr('stroke', 'none');
+            else if (isSelected(idx)) rect.attr('opacity', 1.0);
+            else rect.attr('opacity', 0.55);
           });
 
-          // 3D: use secondary filter to subtly dim non-hovered (mode stays 0 for all)
-          // Mode 1 is NOT used — that makes everything brighter, not dimmer
-          uniforms.uSecFamilyIdx.value     = activeFamilyIdx;
-          uniforms.uSecLabelIdx.value      = li;
-          uniforms.uSecDimFactor.value     = 0.75;
-          uniforms.uSecOutlineFactor.value = 0.0; // no outline on hover
+          // 3D highlight
+          if (filterLevel === 0) {
+            // L0: dim non-hovered categories
+            uniforms.uSecFamilyIdx.value     = activeFamilyIdx;
+            uniforms.uSecLabelIdx.value      = li;
+            uniforms.uSecDimFactor.value     = 0.45;
+            uniforms.uSecOutlineFactor.value = 0.0;
+          } else {
+            // L1 on non-L1 chart: preview L2 intersection within L1 selection
+            uniforms.uSecFamilyIdx.value     = familyIdx;
+            uniforms.uSecLabelIdx.value      = li;
+            uniforms.uSecDimFactor.value     = 0.80;
+            uniforms.uSecOutlineFactor.value = 0.80;
+          }
 
           showPhantomChip(familyIdx, li);
         })
         .on('mouseleave', () => {
           if (appMode !== 'explore') return;
-          if (filterLevel > 0) return;
+          if (filterLevel >= 2) return;
+          if (filterLevel === 1 && isL1Chart) return;
 
           barRects.forEach((rect, idx) => {
             rect.attr('opacity', baseOpacity(idx))
                 .attr('stroke', isSelected(idx) ? 'rgba(255,255,255,0.65)' : 'none');
           });
 
+          // Clear secondary uniforms — locked L2 state is restored by transitionToLevel2 on click
           uniforms.uSecFamilyIdx.value     = -1;
           uniforms.uSecDimFactor.value     = 1.0;
           uniforms.uSecOutlineFactor.value = 0.0;
@@ -981,8 +1005,8 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
         .on('click', () => {
           if (appMode !== 'explore') return;
           if (isL1Chart) {
-            // On L1 family chart: clicking changes or clears L1 selection
-            if (isSelected(li)) resetToLevel0();
+            // When L1 is selected, any click on L1 chart resets (acts as deselect)
+            if (filterLevel >= 1) resetToLevel0();
             else transitionToLevel1(familyIdx, li);
           } else {
             // On L2 family chart: click selects if nothing selected, click again (any bar) deselects
@@ -1014,7 +1038,7 @@ function transitionToLevel2(familyIdx, labelIdx) {
   if (!savedIntersectionState) savedIntersectionState = { alpha: alphaCache.slice() };
   uniforms.uSecFamilyIdx.value     = familyIdx;
   uniforms.uSecLabelIdx.value      = labelIdx;
-  uniforms.uSecDimFactor.value     = 0.65;
+  uniforms.uSecDimFactor.value     = 0.80;
   uniforms.uSecOutlineFactor.value = 1.0;
   // Restrict raycasting to intersection
   const secData = getCategoryFamilyData(familyIdx);
@@ -1064,7 +1088,7 @@ function resetToLevel1() {
 // ── Filter chip rendering ─────────────────────────────────────────────────────
 function makeChip(familyIdx, labelIdx, isPhantom, onRemove) {
   const [r, g, b] = getPaletteRgb(labelIdx);
-  const label = meta.categories[familyIdx].labels[labelIdx];
+  const label = shortenLabel(meta.categories[familyIdx].labels[labelIdx]);
   const chip = document.createElement('span');
   chip.className = 'filter-chip' + (isPhantom ? ' filter-chip-phantom' : '');
   chip.style.background = `rgba(${r},${g},${b},0.35)`;
@@ -1080,6 +1104,37 @@ function makeChip(familyIdx, labelIdx, isPhantom, onRemove) {
   return chip;
 }
 
+function renderFilterStatus(phantomFamilyIdx = -1, phantomLabelIdx = -1) {
+  const el = document.getElementById('filter-status');
+  el.innerHTML = '';
+  const hasPhantom = phantomFamilyIdx >= 0;
+  const hasL1 = filterLevel >= 1;
+  const hasL2 = filterLevel >= 2;
+
+  if (!hasL1 && !hasPhantom) { el.classList.remove('visible'); return; }
+  el.classList.add('visible');
+
+  const prefix = document.createElement('span');
+  prefix.textContent = 'Showing recipes with';
+  el.appendChild(prefix);
+
+  if (hasL1) {
+    el.appendChild(makeChip(activeFamilyIdx, level1LabelIdx, false, null));
+  } else {
+    // L0 phantom — L1 preview
+    el.appendChild(makeChip(phantomFamilyIdx, phantomLabelIdx, true, null));
+    return;
+  }
+
+  if (hasL2) {
+    const and = document.createElement('span'); and.textContent = 'and'; el.appendChild(and);
+    el.appendChild(makeChip(level2FamilyIdx, level2LabelIdx, false, null));
+  } else if (hasPhantom) {
+    const and = document.createElement('span'); and.textContent = 'and'; el.appendChild(and);
+    el.appendChild(makeChip(phantomFamilyIdx, phantomLabelIdx, true, null));
+  }
+}
+
 function renderFilterChips() {
   const bar = document.getElementById('breadcrumb-bar');
   bar.innerHTML = '';
@@ -1088,6 +1143,7 @@ function renderFilterChips() {
     txt.className = 'flavor-text';
     txt.textContent = 'Hover to preview · Click to filter';
     bar.appendChild(txt);
+    renderFilterStatus();
     return;
   }
   bar.appendChild(makeChip(activeFamilyIdx, level1LabelIdx, false, resetToLevel0));
@@ -1095,31 +1151,38 @@ function renderFilterChips() {
     const sep = document.createElement('span');
     sep.className = 'flavor-text';
     sep.style.margin = '0 2px';
-    sep.textContent = '→';
+    sep.textContent = 'and';
     bar.appendChild(sep);
     bar.appendChild(makeChip(level2FamilyIdx, level2LabelIdx, false, resetToLevel1));
   }
+  renderFilterStatus();
 }
 
 function showPhantomChip(familyIdx, labelIdx) {
   const bar = document.getElementById('breadcrumb-bar');
-  // Clear any existing phantom
-  bar.querySelectorAll('.filter-chip-phantom').forEach(e => e.remove());
-  // Add phantom after real chips (or replace flavor text)
+  bar.querySelectorAll('.filter-chip-phantom, .phantom-sep').forEach(e => e.remove());
   if (filterLevel === 0) bar.innerHTML = '';
+  if (filterLevel >= 1) {
+    const sep = document.createElement('span');
+    sep.className = 'flavor-text phantom-sep';
+    sep.style.margin = '0 2px';
+    sep.textContent = 'and';
+    bar.appendChild(sep);
+  }
   bar.appendChild(makeChip(familyIdx, labelIdx, true, null));
+  renderFilterStatus(familyIdx, labelIdx);
 }
 
 function clearPhantomChip() {
   const bar = document.getElementById('breadcrumb-bar');
-  bar.querySelectorAll('.filter-chip-phantom').forEach(e => e.remove());
-  // If we emptied it (was level 0), restore flavor text
+  bar.querySelectorAll('.filter-chip-phantom, .phantom-sep').forEach(e => e.remove());
   if (filterLevel === 0 && !bar.querySelector('.filter-chip')) {
     const txt = document.createElement('span');
     txt.className = 'flavor-text';
     txt.textContent = 'Hover to preview · Click to filter';
     bar.appendChild(txt);
   }
+  renderFilterStatus();
 }
 
 // ── Left panel: explore mode ──────────────────────────────────────────────────

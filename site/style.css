@@ -5,7 +5,7 @@
   --panel-gap:     12px;
   --panel-w:       clamp(300px, 20vw, 360px);
   --left-panel-h:  clamp(280px, 33vh, 400px);
-  --right-panel-h: clamp(352px, 44vh, 478px);
+  --right-panel-h: clamp(420px, 60vh, 560px);
   --chart-panel-w: clamp(420px, 30vw, 600px);
   --chart-panel-h: clamp(240px, 30vh, 360px);
 
@@ -404,8 +404,8 @@ html, body {
 #right-column.story-mode .cat-row {
   pointer-events: none;
 }
-#right-column.story-mode {
-  opacity: 0.82;
+#right-column.story-mode #right-panel {
+  background: rgba(15, 15, 28, 0.20);
 }
 
 /* ── Right panel ───────────────────────────────────────────────────────── */
@@ -419,8 +419,9 @@ html, body {
 
 
 #right-panel {
-  height: var(--right-panel-h);
-  min-height: 0;
+  flex: 1;
+  min-height: var(--right-panel-h);
+  max-height: var(--right-panel-h);
   background: rgba(15, 15, 28, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
@@ -551,6 +552,7 @@ html, body {
   right: var(--panel-gap);
   bottom: var(--panel-gap);
   width: var(--panel-w);
+  min-height: var(--right-panel-h);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -743,6 +745,22 @@ html, body {
   font-size: var(--fs-secondary); color: var(--text-dim);
   z-index: 9999; pointer-events: none;
 }
+
+#filter-status {
+  display: none;
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-secondary);
+  color: var(--text-dim);
+  pointer-events: none;
+  z-index: 990;
+  white-space: nowrap;
+}
+#filter-status.visible { display: flex; }
 
 /* ── Chart panel ───────────────────────────────────────────────────────── */
 #chart-panel {
