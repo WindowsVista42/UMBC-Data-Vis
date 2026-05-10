@@ -893,9 +893,20 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
   const labels = family.labels;
   const maxCount = Math.max(...counts, 1);
 
+  // For unordered categorical families, sort bars by global count descending
+  const SORT_BY_COUNT = new Set(['cuisines', 'meal_types']);
+  const renderOrder = SORT_BY_COUNT.has(family.name)
+    ? (() => {
+        const global = computeFullCounts(familyIdx);
+        return Array.from({length: labels.length}, (_, i) => i)
+          .sort((a, b) => global[b] - global[a]);
+      })()
+    : Array.from({length: labels.length}, (_, i) => i);
+
   const W = container.offsetWidth || 300;
   const MIN_ROW_H = 20;
-  const containerH = Math.max(0, (container.clientHeight || 0) - 12); // subtract padding: 6px 0
+  const TOP_H = 18;
+  const containerH = Math.max(0, (container.clientHeight || 0) - 12 - TOP_H);
   const rowH = containerH > 0
     ? Math.max(MIN_ROW_H, containerH / labels.length)
     : MIN_ROW_H;
@@ -912,7 +923,7 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
 
   container.innerHTML = '';
   const svg = d3.select(container).append('svg')
-    .attr('width', W).attr('height', H)
+    .attr('width', W).attr('height', TOP_H + H)
     .style('display', 'block').style('overflow', 'visible');
 
   const FONT = '"Source Serif 4", serif';
@@ -921,7 +932,7 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
 
   // Clip path for label column so long names don't overflow
   svg.append('defs').append('clipPath').attr('id', 'rpc-label-clip')
-    .append('rect').attr('x', 0).attr('y', 0).attr('width', labelW - 2).attr('height', H);
+    .append('rect').attr('x', 0).attr('y', 0).attr('width', labelW - 2).attr('height', TOP_H + H);
 
   // Bar rects and label texts keyed by label index for hover manipulation
   const barRects = new Map();
@@ -942,10 +953,11 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
     : ((isL1Chart && filterLevel >= 1) || (!isL1Chart && filterLevel >= 2));
   const baseOpacity = li => isSelected(li) ? 1.0 : (hasSelection ? 0.28 : 0.88);
 
-  labels.forEach((label, li) => {
+  renderOrder.forEach((li, renderIdx) => {
+    const label = labels[li];
     const count = counts[li];
     const barW = count > 0 ? Math.max(2, (count / maxCount) * barMaxW) : 0;
-    const y = li * rowH;
+    const y = TOP_H + renderIdx * rowH;
     const [r, g, b] = getPaletteRgb(li);
     const barColor = `rgba(${r},${g},${b},0.75)`;
     const sel = isSelected(li);
@@ -1061,6 +1073,27 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
         });
     }
   });
+
+  // Column headers
+  const barStart = labelW + barGap;
+  svg.append('text')
+    .attr('x', labelW - 6).attr('y', TOP_H - 6)
+    .attr('text-anchor', 'end')
+    .attr('font-size', '10px').attr('font-family', FONT)
+    .attr('fill', 'rgba(255,255,255,0.40)')
+    .text('↓ Cluster');
+  svg.append('text')
+    .attr('x', labelW + (barGap - 6) / 2).attr('y', TOP_H - 6)
+    .attr('text-anchor', 'middle')
+    .attr('font-size', '10px').attr('font-family', FONT)
+    .attr('fill', 'rgba(255,255,255,0.25)')
+    .text('|');
+  svg.append('text')
+    .attr('x', barStart).attr('y', TOP_H - 6)
+    .attr('text-anchor', 'start')
+    .attr('font-size', '10px').attr('font-family', FONT)
+    .attr('fill', 'rgba(255,255,255,0.40)')
+    .text('Recipe Count →');
 }
 
 // ── Filter state machine ──────────────────────────────────────────────────────
@@ -1752,6 +1785,8 @@ function applyStep(step) {
       document.querySelectorAll('.cat-tab').forEach((btn, i) => {
         btn.classList.toggle('active', i === idx);
       });
+      const familyName = step.colorBy.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      document.getElementById('story-family-title').textContent = familyName;
     }
   }
   // Apply highlight — string, array of strings, or null. Family is always colorBy.
@@ -1847,6 +1882,7 @@ function setMode(mode) {
     showExploreDefault();
     document.getElementById('btn-randomize').textContent = 'Surprise Me';
     renderFilterChips();
+    requestAnimationFrame(() => renderRightPanelChart(activeFamilyIdx));
   } else {
     setLockedIdx(-1);
     hideHoverTip();

@@ -408,12 +408,15 @@ html, body {
 
 
 /* ── Right column story lock ───────────────────────────────────────────── */
-#right-column.story-mode #category-tabs {
-  pointer-events: none;
+#story-family-title {
+  display: none;
+  font-size: var(--fs-title);
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 12px 12px 4px;
 }
-#right-column.story-mode #right-panel-chart * {
-  cursor: default !important;
-}
+#right-column.story-mode #story-family-title { display: block; }
+#right-column.story-mode #category-tabs { display: none; }
 
 /* ── Right panel ───────────────────────────────────────────────────────── */
 #right-panel-label {
