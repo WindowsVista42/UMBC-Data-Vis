@@ -255,26 +255,29 @@ html, body {
   min-height: 0;
 }
 
-/* Recipe "Show X" buttons */
+/* Recipe "Show X" buttons — pinned footer */
 #recipe-chart-btns {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 14px;
+  display: none;
+  flex-direction: row;
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.04);
+  border-top: 1px solid rgba(255,255,255,0.10);
 }
 
 .recipe-chart-btn {
+  flex: 1;
   font-size: var(--fs-label);
-  padding: 7px 12px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 5px;
+  padding: 9px 8px;
+  background: none;
+  border: none;
+  border-right: 1px solid rgba(255,255,255,0.10);
   color: var(--text-secondary);
   cursor: pointer;
-  text-align: left;
+  text-align: center;
   transition: background 0.12s, color 0.12s;
 }
-.recipe-chart-btn:hover { background: rgba(255,255,255,0.10); color: var(--text-primary); }
+.recipe-chart-btn:last-child { border-right: none; }
+.recipe-chart-btn:hover { background: rgba(255,255,255,0.07); color: var(--text-primary); }
 .recipe-chart-btn.disabled { opacity: 0.28; cursor: not-allowed; pointer-events: none; }
 
 .explore-title {
@@ -299,25 +302,20 @@ html, body {
   display: none;
   position: fixed;
   left: calc(var(--panel-gap) + var(--panel-w) + 8px);
-  top: calc(var(--topbar-h) + var(--panel-gap) + var(--left-panel-h) / 2);
-  transform: translateY(-50%);
+  top: calc(var(--topbar-h) + var(--panel-gap));
   font-size: var(--fs-label);
-  padding: 8px 10px;
-  background: var(--panel-bg);
-  border: 1px solid rgba(255,255,255,0.14);
+  padding: 9px 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.10);
   border-radius: 8px;
   color: var(--text-secondary);
   cursor: pointer;
   backdrop-filter: blur(8px);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.40);
   transition: background 0.12s, color 0.12s;
   z-index: 1000;
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-  letter-spacing: 0.06em;
 }
 #btn-randomize:hover {
-  background: rgba(30, 30, 50, 0.92);
+  background: rgba(255,255,255,0.07);
   color: var(--text-primary);
 }
 

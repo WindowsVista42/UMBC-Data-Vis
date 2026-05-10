@@ -1240,6 +1240,7 @@ function randomizeRecipe() {
 function showExploreDefault() {
   document.getElementById('left-panel').style.display = 'none';
   document.getElementById('explore-default').style.display = 'flex';
+  document.getElementById('recipe-chart-btns').style.display = 'none';
   hideLeftPanelChart();
 }
 
@@ -1251,7 +1252,9 @@ function showRecipeInfo(idx) {
   hideLeftPanelChart();
 
   // Render "Show X" buttons after metrics load
-  document.getElementById('recipe-chart-btns').innerHTML = '';
+  const btnsFooter = document.getElementById('recipe-chart-btns');
+  btnsFooter.innerHTML = '';
+  btnsFooter.style.display = 'flex';
 
   // Show placeholder immediately, fill in async
   document.getElementById('recipe-name').textContent = `Recipe #${recipeIds[idx]}`;
@@ -1339,6 +1342,7 @@ async function renderRecipeChartButtons(recipeId) {
 
 // ── Left panel chart view ─────────────────────────────────────────────────────
 function showLeftPanelChart(title, renderFn) {
+  document.getElementById('recipe-chart-btns').style.display = 'none';
   document.getElementById('explore-content').style.display = 'none';
   const view = document.getElementById('left-panel-chart-view');
   view.style.display = 'flex';
@@ -1351,6 +1355,7 @@ function showLeftPanelChart(title, renderFn) {
 function hideLeftPanelChart() {
   document.getElementById('left-panel-chart-view').style.display = 'none';
   document.getElementById('left-panel-chart-body').innerHTML = '';
+  document.getElementById('recipe-chart-btns').style.display = 'none';
 }
 
 async function showRecipeChartInPanel(recipeId, tabId, title) {
@@ -2012,6 +2017,7 @@ async function boot() {
   document.getElementById('btn-chart-back').addEventListener('click', () => {
     hideLeftPanelChart();
     document.getElementById('explore-content').style.display = 'block';
+    document.getElementById('recipe-chart-btns').style.display = 'flex';
   });
 
   // About modal
