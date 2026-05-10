@@ -267,7 +267,7 @@ async function getRecipeData(idx) {
 function initScene(palette) {
   const canvas = document.getElementById('three-canvas');
   const w = window.innerWidth - LEFT_W - RIGHT_W;
-  const h = window.innerHeight - TOPBAR_H;
+  const h = window.innerHeight;
 
   renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -473,8 +473,8 @@ function worldToScreen(i) {
   const i3 = i * 3;
   const v = new THREE.Vector3(posArr[i3], posArr[i3 + 1], posArr[i3 + 2]).project(camera);
   const w = window.innerWidth - LEFT_W - RIGHT_W;
-  const h = window.innerHeight - TOPBAR_H;
-  return { x: (v.x + 1) / 2 * w + LEFT_W, y: (-v.y + 1) / 2 * h + TOPBAR_H };
+  const h = window.innerHeight;
+  return { x: (v.x + 1) / 2 * w + LEFT_W, y: (-v.y + 1) / 2 * h };
 }
 
 function positionHoverTip(idx) {
@@ -777,7 +777,7 @@ function setCameraPreset(preset) {
 // ── Resize ────────────────────────────────────────────────────────────────────
 function onResize() {
   const w = window.innerWidth - LEFT_W - RIGHT_W;
-  const h = window.innerHeight - TOPBAR_H;
+  const h = window.innerHeight;
   renderer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
