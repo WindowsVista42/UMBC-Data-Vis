@@ -39,6 +39,16 @@
       ]
     },
     {
+      "colorBy": "cuisines",
+      "camera": { "position": [10.957, 9.330, 2.658], "target": [7.976, 6.322, 4.840] },
+      "highlight": "english",
+      "categorySubtitle": "Scones, spotted",
+      "content": [
+        { "type": "text", "style": "heading", "value": "We Found Some Scones" },
+        { "type": "text", "style": "body", "value": "Up here, on their own little island, a quiet colony of English recipes has made itself at home. Nobody asked them to be this far from everything else. Nobody planned for this. Scones, clotted cream, blueberry something-or-other, all bobbing together serenely in the upper reaches of the point cloud. Hover over them. They're delightful." }
+      ]
+    },
+    {
       "colorBy": "meal_types",
       "camera": { "position": [3.906, 11.667, 1.445], "target": [4.233, -0.981, 5.861] },
       "highlight": null,
