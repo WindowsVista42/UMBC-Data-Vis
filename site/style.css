@@ -11,7 +11,7 @@
   --chart-panel-h: clamp(240px, 30vh, 360px);
 
   /* Panel background */
-  --panel-bg: rgba(15, 15, 28, 0.35);
+  --panel-bg: rgba(15, 15, 28, 0.50);
 
   /* Type scale */
   --fs-hero:      28px;
@@ -327,8 +327,8 @@ html, body {
   top: calc(var(--topbar-h) + var(--panel-gap));
   font-size: var(--fs-label);
   padding: 9px 12px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.10);
+  background: var(--panel-bg);
+  border: 1px solid rgba(255,255,255,0.12);
   border-radius: 8px;
   color: var(--text-secondary);
   cursor: pointer;
@@ -408,8 +408,7 @@ html, body {
 
 
 /* ── Right column story lock ───────────────────────────────────────────── */
-#right-column.story-mode #category-tabs,
-#right-column.story-mode .cat-row {
+#right-column.story-mode #category-tabs {
   pointer-events: none;
 }
 
@@ -675,8 +674,8 @@ html, body {
   position: absolute;
   top: 12px; width: 0; height: 0;
 }
-#hover-tip-arrow.arrow-left  { left: -7px; border-top: 7px solid transparent; border-bottom: 7px solid transparent; border-right: 7px solid rgba(15,15,28,0.20); }
-#hover-tip-arrow.arrow-right { right: -7px; border-top: 7px solid transparent; border-bottom: 7px solid transparent; border-left: 7px solid rgba(15,15,28,0.20); }
+#hover-tip-arrow.arrow-left  { left: -7px; border-top: 7px solid transparent; border-bottom: 7px solid transparent; border-right: 7px solid rgba(255,255,255,0.85); }
+#hover-tip-arrow.arrow-right { right: -7px; border-top: 7px solid transparent; border-bottom: 7px solid transparent; border-left: 7px solid rgba(255,255,255,0.85); }
 
 #hover-tip-inner {
   background: var(--panel-bg);

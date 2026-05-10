@@ -32,6 +32,7 @@ const VERT = /* glsl */`
   uniform int   uSecLabelIdx;
   uniform float uSecDimFactor;     // dim for non-matching L1 points (default 1.0)
   uniform float uSecOutlineFactor; // outline brightness for matching L2 points: 0=none, 0.4=hover, 1=locked
+  uniform int   uLockedVertexIdx;  // -1 = none; locked point gets mode 1 (highlight)
 
   void main() {
     int flatIdx = uActiveFamilyIdx * uN + gl_VertexID;
@@ -40,6 +41,7 @@ const VERT = /* glsl */`
     int catId = int(texelFetch(uCategoryTex, ivec2(tx, ty), 0).r);
 
     int   mode      = uCategoryModes[catId];
+    if (uLockedVertexIdx == gl_VertexID) mode = 1;
     float dimFactor = 1.0;
     bool  inL2      = false;
 
@@ -128,6 +130,11 @@ let level2FamilyIdx = -1; // family index for Level 2 chart
 let level2LabelIdx = -1;  // label index within level2 family
 
 let lockedIdx = -1;
+function setLockedIdx(idx) {
+  lockedIdx = idx;
+  if (uniforms.uLockedVertexIdx !== undefined) uniforms.uLockedVertexIdx.value = idx;
+}
+
 let hoverIdx = -1;   // currently hovered point index
 let pointerIsDown = false;
 let mouseDownX = 0, mouseDownY = 0;
@@ -318,6 +325,7 @@ function initScene(palette) {
     uSecLabelIdx:      { value: 0 },
     uSecDimFactor:     { value: 1.0 },
     uSecOutlineFactor: { value: 0.0 },
+    uLockedVertexIdx:  { value: -1 },
   };
 
   const mat = new THREE.ShaderMaterial({
@@ -483,16 +491,26 @@ function positionHoverTip(idx) {
   const sp = worldToScreen(idx);
   const tw = tip.offsetWidth || 180;
   const th = tip.offsetHeight || 32;
-  const canvasRight = window.innerWidth - RIGHT_W;
   const margin = 14;
 
+  // Horizontal zone: between right edge of left panel and left edge of right column
+  const lpEl = document.getElementById('left-panel');
+  const edEl = document.getElementById('explore-default');
+  const rcEl = document.getElementById('right-column');
+  const leftBound = (lpEl && lpEl.style.display !== 'none')
+    ? lpEl.getBoundingClientRect().right + 4
+    : (edEl && edEl.style.display !== 'none')
+    ? edEl.getBoundingClientRect().right + 4
+    : 4;
+  const rightBound = rcEl ? rcEl.getBoundingClientRect().left - 4 : window.innerWidth - 4;
+
   let left, arrowSide;
-  if (sp.x + margin + tw + 16 <= canvasRight) {
+  if (sp.x + margin + tw + 16 <= rightBound) {
     left = sp.x + margin; arrowSide = 'left';
   } else {
     left = sp.x - margin - tw; arrowSide = 'right';
   }
-  left = Math.max(LEFT_W + 4, Math.min(left, canvasRight - tw - 4));
+  left = Math.max(leftBound, Math.min(left, rightBound - tw));
 
   let top = sp.y - th / 2;
   top = Math.max(TOPBAR_H + 4, Math.min(top, window.innerHeight - th - 4));
@@ -613,7 +631,7 @@ function onPointerDown(e) {
 function onPointerMove(e) {
   if (pointerIsDown) {
     const d = Math.hypot(e.clientX - mouseDownX, e.clientY - mouseDownY);
-    if (d > DRAG_THRESH) { hideHoverTip(); return; }
+    if (d > DRAG_THRESH) { if (lockedIdx < 0) hideHoverTip(); return; }
   }
   if (lockedIdx >= 0) return;
   const idx = raycastBest(e);
@@ -637,7 +655,7 @@ function onPointerUp(e) {
     lastClickTime = 0;
     if (appMode === 'story') return;
     // Undo the first-click recipe selection
-    lockedIdx = -1;
+    setLockedIdx(-1);
     hideHoverTip();
     showExploreDefault();
     if (idx >= 0) {
@@ -653,13 +671,13 @@ function onPointerUp(e) {
 
   lastClickTime = now;
   if (appMode === 'explore') {
-    if (idx >= 0) {
-      lockedIdx = idx;
-      showRecipeInfo(idx);
-    } else {
-      lockedIdx = -1;
-      hideHoverTip();
+    if (lockedIdx >= 0) {
+      setLockedIdx(-1);
       showExploreDefault();
+      if (idx >= 0) showHoverTip(idx); else hideHoverTip();
+    } else if (idx >= 0) {
+      setLockedIdx(idx);
+      showRecipeInfo(idx);
     }
   }
 }
@@ -1233,7 +1251,7 @@ function clearPhantomChip() {
 function randomizeRecipe() {
   if (!N || !posArr) return;
   const idx = Math.floor(Math.random() * N);
-  lockedIdx = idx;
+  setLockedIdx(idx);
 
   const i3   = idx * 3;
   const pt   = new THREE.Vector3(posArr[i3], posArr[i3 + 1], posArr[i3 + 2]);
@@ -1746,6 +1764,11 @@ function resolveDistColors(familyName, labels) {
 
 // ── Left panel: story mode ────────────────────────────────────────────────────
 function applyStep(step) {
+  // Clear any secondary-dim state left over from hover or explore mode
+  uniforms.uSecFamilyIdx.value     = -1;
+  uniforms.uSecDimFactor.value     = 1.0;
+  uniforms.uSecOutlineFactor.value = 0.0;
+
   // Switch category family
   if (step.colorBy) {
     const idx = meta.categories.findIndex(c => c.name === step.colorBy);
@@ -1841,13 +1864,13 @@ function setMode(mode) {
   if (mode === 'explore') {
     highlightLabelSet = null;
     setHighlightLabel(-1);
-    lockedIdx = -1;
+    setLockedIdx(-1);
     hideHoverTip();
     hideLeftPanelChart();
     showExploreDefault();
     document.getElementById('btn-randomize').textContent = 'Surprise Me';
   } else {
-    lockedIdx = -1;
+    setLockedIdx(-1);
     hideHoverTip();
     document.getElementById('left-panel').style.display = 'flex';
     document.getElementById('explore-default').style.display = 'none';
