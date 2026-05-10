@@ -28,9 +28,10 @@ const VERT = /* glsl */`
   uniform int  uPaletteN;
   uniform int  uCategoryModes[${MAX_LABELS}];
 
-  uniform int   uSecFamilyIdx;   // -1 = inactive
+  uniform int   uSecFamilyIdx;     // -1 = inactive
   uniform int   uSecLabelIdx;
-  uniform float uSecDimFactor;   // multiplier for secondary-filtered points (default 1.0)
+  uniform float uSecDimFactor;     // dim for non-matching L1 points (default 1.0)
+  uniform float uSecOutlineFactor; // outline brightness for matching L2 points: 0=none, 0.4=hover, 1=locked
 
   void main() {
     int flatIdx = uActiveFamilyIdx * uN + gl_VertexID;
@@ -40,19 +41,21 @@ const VERT = /* glsl */`
 
     int   mode      = uCategoryModes[catId];
     float dimFactor = 1.0;
+    bool  inL2      = false;
 
-    // Secondary filter: scale down points in the primary selection that don't match
+    // Secondary filter: dim non-matching points within L1 selection
     if (uSecFamilyIdx >= 0 && mode == 0) {
       int secFlat  = uSecFamilyIdx * uN + gl_VertexID;
       int secCatId = int(texelFetch(uCategoryTex, ivec2(secFlat % ${CAT_TEX_W}, secFlat / ${CAT_TEX_W}), 0).r);
       if (secCatId != uSecLabelIdx) dimFactor = uSecDimFactor;
+      else inL2 = true;
     }
 
     // mode 0 = normal, 1 = light, 2 = dark/desaturated — never hidden
     vAlpha = 1.0;
     int paletteIdx = mode * uPaletteN + catId % uPaletteN;
     vColor = uPalette[paletteIdx] * dimFactor;
-    vOutline = (dimFactor > uSecDimFactor) && (mode == 0) ? 1.0 : 0.0;
+    vOutline = inL2 ? uSecOutlineFactor : 0.0;
 
     vec4 mvPos    = modelViewMatrix * vec4(position, 1.0);
     gl_Position   = projectionMatrix * mvPos;
@@ -301,9 +304,10 @@ function initScene(palette) {
     uPalette: { value: palette.flat },
     uPaletteN: { value: palette.n },
     uCategoryModes: { value: Array.from(categoryModes) },
-    uSecFamilyIdx: { value: -1 },
-    uSecLabelIdx: { value: 0 },
-    uSecDimFactor: { value: 1.0 },
+    uSecFamilyIdx:     { value: -1 },
+    uSecLabelIdx:      { value: 0 },
+    uSecDimFactor:     { value: 1.0 },
+    uSecOutlineFactor: { value: 0.0 },
   };
 
   const mat = new THREE.ShaderMaterial({
@@ -355,7 +359,6 @@ function setHighlightLabel(labelIdx) {
       alphaCache[i] = famData[i] === labelIdx ? 1.0 : 0.0;
     }
   }
-  if (appMode === 'explore') renderRightPanelChart(filterLevel === 0 ? activeFamilyIdx : level2FamilyIdx);
 }
 
 function applyHighlightLabels(labelIdxs) {
@@ -399,8 +402,9 @@ function applyIntersectionHighlight(secondaryFamName, secondaryLabel) {
 
 function restoreIntersectionHighlight() {
   if (!savedIntersectionState) return;
-  uniforms.uSecFamilyIdx.value = -1;
-  uniforms.uSecDimFactor.value = 1.0;
+  uniforms.uSecFamilyIdx.value     = -1;
+  uniforms.uSecDimFactor.value     = 1.0;
+  uniforms.uSecOutlineFactor.value = 0.0;
   alphaCache.set(savedIntersectionState.alpha);
   savedIntersectionState = null;
 }
@@ -831,20 +835,22 @@ function computeFilteredCounts(familyIdx, l1FamilyIdx, l1LabelIdx) {
 }
 
 function applyL2SecondaryPreview(famIdx, labelIdx) {
-  uniforms.uSecFamilyIdx.value = famIdx;
-  uniforms.uSecLabelIdx.value = labelIdx;
-  uniforms.uSecDimFactor.value = 0.45; // lighter than locked L2 (0.35)
+  uniforms.uSecFamilyIdx.value     = famIdx;
+  uniforms.uSecLabelIdx.value      = labelIdx;
+  uniforms.uSecDimFactor.value     = 0.9;   // very subtle dim on hover
+  uniforms.uSecOutlineFactor.value = 0.4;   // faint outline on matching points
 }
 
 function restoreSecondaryAfterHover() {
   if (filterLevel === 2) {
-    // Restore locked L2 state
-    uniforms.uSecFamilyIdx.value = level2FamilyIdx;
-    uniforms.uSecLabelIdx.value = level2LabelIdx;
-    uniforms.uSecDimFactor.value = 0.35;
+    uniforms.uSecFamilyIdx.value     = level2FamilyIdx;
+    uniforms.uSecLabelIdx.value      = level2LabelIdx;
+    uniforms.uSecDimFactor.value     = 0.65;  // noticeable but not harsh
+    uniforms.uSecOutlineFactor.value = 1.0;   // full white outline when locked
   } else {
-    uniforms.uSecFamilyIdx.value = -1;
-    uniforms.uSecDimFactor.value = 1.0;
+    uniforms.uSecFamilyIdx.value     = -1;
+    uniforms.uSecDimFactor.value     = 1.0;
+    uniforms.uSecOutlineFactor.value = 0.0;
   }
 }
 
@@ -941,44 +947,42 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
         .style('cursor', isSelected(li) ? 'default' : 'pointer')
         .on('mouseenter', () => {
           if (appMode !== 'explore') return;
-          if (isSelected(li)) return; // no hover on selected bar
+          if (isSelected(li)) return;
 
-          // Visual: highlight hovered bar, dim others (selected keeps its stroke)
+          // Bar visuals: dim non-selected, no outline on hover
           barRects.forEach((rect, idx) => {
             if (idx === li) {
-              rect.attr('opacity', 1.0).attr('stroke', 'rgba(255,255,255,0.55)').attr('stroke-width', 1.5);
+              rect.attr('opacity', 1.0).attr('stroke', 'none');
             } else if (isSelected(idx)) {
-              rect.attr('opacity', 1.0); // selected stays bright
+              rect.attr('opacity', 1.0); // selected keeps its stroke
             } else {
-              rect.attr('opacity', 0.18);
+              rect.attr('opacity', 0.25);
             }
           });
 
-          // 3D highlight
+          // 3D highlight — only when not at Level 2 (locked)
           if (filterLevel === 0) {
-            // Light highlight: mode 1 for all, mode 0 for hovered label
             const modes = Array.from(categoryModes);
             const nLabels = meta.categories[activeFamilyIdx].labels.length;
             for (let j = 0; j < MAX_LABELS; j++) modes[j] = j < nLabels ? 1 : 0;
             modes[li] = 0;
             uniforms.uCategoryModes.value = modes;
-          } else if (familyIdx !== activeFamilyIdx) {
-            // L2 hover preview: secondary filter dims non-matching within L1 selection
+          } else if (filterLevel === 1 && familyIdx !== activeFamilyIdx) {
             applyL2SecondaryPreview(familyIdx, li);
           }
+          // filterLevel === 2: keep locked state, no 3D update
+
           showPhantomChip(familyIdx, li);
         })
         .on('mouseleave', () => {
           if (appMode !== 'explore') return;
           if (isSelected(li)) return;
 
-          // Restore bar visuals
           barRects.forEach((rect, idx) => {
             rect.attr('opacity', baseOpacity(idx))
                 .attr('stroke', isSelected(idx) ? 'rgba(255,255,255,0.65)' : 'none');
           });
 
-          // Restore 3D
           uniforms.uCategoryModes.value = Array.from(categoryModes);
           restoreSecondaryAfterHover();
           clearPhantomChip();
@@ -1025,9 +1029,10 @@ function transitionToLevel2(familyIdx, labelIdx) {
   level2LabelIdx = labelIdx;
   // Apply secondary filter via shader uniforms (locked at 0.35 dim)
   if (!savedIntersectionState) savedIntersectionState = { alpha: alphaCache.slice() };
-  uniforms.uSecFamilyIdx.value = familyIdx;
-  uniforms.uSecLabelIdx.value = labelIdx;
-  uniforms.uSecDimFactor.value = 0.35;
+  uniforms.uSecFamilyIdx.value     = familyIdx;
+  uniforms.uSecLabelIdx.value      = labelIdx;
+  uniforms.uSecDimFactor.value     = 0.65;
+  uniforms.uSecOutlineFactor.value = 1.0;
   // Restrict raycasting to intersection
   const secData = getCategoryFamilyData(familyIdx);
   for (let i = 0; i < N; i++) {
@@ -1056,8 +1061,9 @@ function resetToLevel1() {
   filterLevel = 1;
   level2LabelIdx = -1;
   // Clear secondary uniforms, keep L1 highlight
-  uniforms.uSecFamilyIdx.value = -1;
-  uniforms.uSecDimFactor.value = 1.0;
+  uniforms.uSecFamilyIdx.value     = -1;
+  uniforms.uSecDimFactor.value     = 1.0;
+  uniforms.uSecOutlineFactor.value = 0.0;
   if (savedIntersectionState) {
     alphaCache.set(savedIntersectionState.alpha);
     savedIntersectionState = null;
