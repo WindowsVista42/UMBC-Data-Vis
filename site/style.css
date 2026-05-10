@@ -5,7 +5,7 @@
   --panel-gap:     12px;
   --panel-w:       clamp(300px, 20vw, 360px);
   --left-panel-h:  clamp(280px, 33vh, 400px);
-  --right-panel-h: clamp(420px, 60vh, 560px);
+  --right-panel-h: clamp(420px, 80vh, 760px);
   --chart-panel-w: clamp(420px, 30vw, 600px);
   --chart-panel-h: clamp(240px, 30vh, 360px);
 
@@ -120,7 +120,6 @@ html, body {
   flex-direction: column;
   z-index: 1000;
   overflow: hidden;
-  transition: opacity 0.15s ease;
 }
 
 /* Story panel */
@@ -339,7 +338,7 @@ html, body {
   margin: 10px 0;
 }
 
-#explore-recipe, #explore-cluster { display: none; }
+#explore-recipe { display: none; }
 
 #recipe-name {
   font-size: var(--fs-title);
@@ -387,27 +386,6 @@ html, body {
   font-style: italic;
 }
 
-#cluster-name {
-  font-size: var(--fs-title);
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 4px;
-}
-
-#cluster-count {
-  font-size: var(--fs-body);
-  color: var(--text-muted);
-  margin-bottom: 14px;
-}
-
-#cluster-placeholder {
-  font-size: var(--fs-body);
-  color: var(--text-dim);
-  padding: 12px;
-  border: 1px dashed rgba(255,255,255,0.12);
-  border-radius: 5px;
-  text-align: center;
-}
 
 /* ── Right column story lock ───────────────────────────────────────────── */
 #right-column.story-mode #category-tabs,

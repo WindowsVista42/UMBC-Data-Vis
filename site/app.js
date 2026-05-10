@@ -632,25 +632,21 @@ function onPointerUp(e) {
   const idx = raycastBest(e);
   const now = Date.now();
 
+  // Check double-click FIRST — cancel single-click effect, then filter category
   if (now - lastClickTime < DBL_CLICK_MS && lastClickTime > 0) {
     lastClickTime = 0;
     if (appMode === 'story') return;
-    hideHoverTip();
+    // Undo the first-click recipe selection
     lockedIdx = -1;
+    hideHoverTip();
+    showExploreDefault();
     if (idx >= 0) {
-      // Double-click: isolate the category of this point
       const famData = getCategoryFamilyData(activeFamilyIdx);
       const catId = famData[idx];
-      if (highlightedLabelIdx === catId) {
-        setHighlightLabel(-1);
-        showExploreDefault();
-      } else {
-        setHighlightLabel(catId);
-        showClusterInfo(catId);
-      }
+      if (filterLevel >= 1 && level1LabelIdx === catId) resetToLevel0();
+      else transitionToLevel1(activeFamilyIdx, catId);
     } else {
-      setHighlightLabel(-1);
-      showExploreDefault();
+      resetToLevel0();
     }
     return;
   }
@@ -1250,11 +1246,8 @@ function showExploreDefault() {
 function showRecipeInfo(idx) {
   document.getElementById('explore-default').style.display = 'none';
   document.getElementById('left-panel').style.display = 'flex';
-  document.getElementById('left-panel').style.opacity = '0';
-  requestAnimationFrame(() => { document.getElementById('left-panel').style.opacity = '1'; });
   document.getElementById('explore-content').style.display = 'block';
   document.getElementById('explore-recipe').style.display = 'block';
-  document.getElementById('explore-cluster').style.display = 'none';
   hideLeftPanelChart();
 
   // Render "Show X" buttons after metrics load
@@ -1343,25 +1336,6 @@ async function renderRecipeChartButtons(recipeId) {
   });
 }
 
-function showClusterInfo(labelIdx) {
-  if (appMode !== 'explore') return;
-  const family = meta.categories[activeFamilyIdx];
-  const label = family.labels[labelIdx] ?? `Category ${labelIdx}`;
-  const famData = getCategoryFamilyData(activeFamilyIdx);
-  let count = 0;
-  for (let i = 0; i < N; i++) if (famData[i] === labelIdx) count++;
-
-  document.getElementById('explore-default').style.display = 'none';
-  document.getElementById('left-panel').style.display = 'flex';
-  document.getElementById('left-panel').style.opacity = '0';
-  requestAnimationFrame(() => { document.getElementById('left-panel').style.opacity = '1'; });
-  document.getElementById('explore-content').style.display = 'block';
-  document.getElementById('explore-recipe').style.display = 'none';
-  document.getElementById('explore-cluster').style.display = 'block';
-  hideLeftPanelChart();
-  document.getElementById('cluster-name').textContent = label;
-  document.getElementById('cluster-count').textContent = `${count.toLocaleString()} recipes`;
-}
 
 // ── Left panel chart view ─────────────────────────────────────────────────────
 function showLeftPanelChart(title, renderFn) {
@@ -1475,7 +1449,7 @@ function renderChart(container, config, data) {
 
   const W = container.clientWidth > 10 ? container.clientWidth : 266;
   const isInline = config.placement === 'inline';
-  const H = isInline ? 130 : 190;
+  const H = isInline ? 130 : (container.clientHeight > 60 ? container.clientHeight : 190);
   const margin = type === 'beeswarm'
     ? { top: 8, right: 10, bottom: 26, left: 10 }
     : isBinned
