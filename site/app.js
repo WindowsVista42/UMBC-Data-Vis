@@ -1349,6 +1349,7 @@ function showRecipeInfo(idx) {
   document.getElementById('recipe-stats').textContent = 'Loading…';
   document.getElementById('recipe-ingredients').textContent = '';
   document.getElementById('recipe-description').textContent = '';
+  document.getElementById('recipe-link').href = '';
 
   getRecipeData(idx).then(r => {
     if (!r) return;
@@ -1380,19 +1381,24 @@ function showRecipeInfo(idx) {
     if (r.minutes) stats.push(`${r.minutes} min`);
     if (r.n_steps) stats.push(`${r.n_steps} steps`);
     if (r.n_ingredients) stats.push(`${r.n_ingredients} ingredients`);
+    if (r.submitted) stats.push(r.submitted.slice(0, 7));
     document.getElementById('recipe-stats').textContent = stats.join(' · ');
 
     if (r.ingredients?.length) {
-      const shown = r.ingredients.slice(0, 8);
+      const shown = r.ingredients.slice(0, 12);
       document.getElementById('recipe-ingredients').textContent =
-        shown.join(', ') + (r.ingredients.length > 8 ? ` +${r.ingredients.length - 8} more` : '');
+        shown.join(', ') + (r.ingredients.length > 12 ? ` +${r.ingredients.length - 12} more` : '');
     }
 
     if (r.description) {
       const desc = r.description.trim();
       document.getElementById('recipe-description').textContent =
-        desc.length > 220 ? desc.slice(0, 220) + '…' : desc;
+        desc.length > 300 ? desc.slice(0, 300) + '…' : desc;
     }
+
+    const recipeName = r.name || `Recipe #${recipeIds[idx]}`;
+    document.getElementById('recipe-link').href =
+      `https://www.google.com/search?q=${encodeURIComponent('food.com ' + recipeName)}`;
 
     // "Show X" chart buttons — loaded after metrics resolve
     renderRecipeChartButtons(recipeIds[idx]);

@@ -363,7 +363,7 @@ html, body {
 #recipe-name {
   font-size: var(--fs-title);
   font-weight: 600;
-  line-height: 1.3;
+  line-height: 1.25;
   color: var(--text-primary);
   margin-bottom: 8px;
 }
@@ -386,25 +386,48 @@ html, body {
 }
 
 #recipe-stats {
-  font-size: var(--fs-body);
+  font-size: var(--fs-secondary);
   color: var(--text-secondary);
-  margin-bottom: 10px;
-  line-height: 1.7;
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+.recipe-section-label {
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.07);
 }
 
 #recipe-ingredients {
-  font-size: var(--fs-body);
-  line-height: 1.7;
+  font-size: var(--fs-secondary);
+  line-height: 1.6;
   color: var(--text-muted);
-  margin-bottom: 10px;
+  margin-bottom: 0;
 }
 
 #recipe-description {
-  font-size: var(--fs-body);
+  font-size: var(--fs-secondary);
   line-height: 1.65;
   color: var(--text-muted);
   font-style: italic;
 }
+
+#recipe-link {
+  display: inline-block;
+  margin-top: 12px;
+  font-size: var(--fs-micro);
+  color: var(--text-dim);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+  padding-bottom: 1px;
+  transition: color 0.12s, border-color 0.12s;
+}
+#recipe-link:hover { color: var(--text-secondary); border-color: rgba(255,255,255,0.35); }
 
 
 /* ── Right column story lock ───────────────────────────────────────────── */
