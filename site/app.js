@@ -694,9 +694,11 @@ function onPointerLeave() {
 
 // ── Camera ────────────────────────────────────────────────────────────────────
 const CAM_BACK = new THREE.Vector3(0, 0, 1); // camera looks down local -Z in Three.js
-const MS_PER_RAD = 350;
-const MS_MIN = 200;
-const MS_MAX = 900;
+const MS_PER_RAD = 210;
+const MS_PER_UNIT_TARGET = 36;
+const MS_PER_UNIT_DIST = 24;
+const MS_MIN = 240;
+const MS_MAX = 840;
 
 function quatFromLookAt(from, to) {
   const lookDir = to.clone().sub(from).normalize();
@@ -721,10 +723,14 @@ function animateCameraTo(toQ, toDist, toTarget) {
   const fromTarget = controls.target.clone();
   const t0 = performance.now();
 
-  // Duration proportional to rotation angle — fast small moves, longer large ones
+  // Duration based on rotation angle + target displacement + distance change
   const cosHalf = Math.abs(fromQ.dot(toQ));
   const angle = 2 * Math.acos(Math.min(1, cosHalf));
-  const ms = Math.max(MS_MIN, Math.min(MS_MAX, angle * MS_PER_RAD));
+  const targetMove = fromTarget.distanceTo(toTarget);
+  const distMove = Math.abs(fromDist - toDist);
+  const ms = Math.max(MS_MIN, Math.min(MS_MAX,
+    angle * MS_PER_RAD + targetMove * MS_PER_UNIT_TARGET + distMove * MS_PER_UNIT_DIST
+  ));
 
   camAnim = (now) => {
     const t = Math.min((now - t0) / ms, 1);

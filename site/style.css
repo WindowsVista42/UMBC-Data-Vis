@@ -11,7 +11,7 @@
   --chart-panel-h: clamp(240px, 30vh, 360px);
 
   /* Panel background */
-  --panel-bg: rgba(15, 15, 28, 0.50);
+  --panel-bg: rgba(11, 11, 20, 0.58);
 
   /* Type scale */
   --fs-hero:      28px;
@@ -77,16 +77,16 @@ html, body {
   padding: 0 20px;
   display: flex;
   align-items: center;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.04);
   border: none;
-  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  border-right: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 0;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
 }
-.mode-btn:first-child { border-left: 1px solid rgba(255,255,255,0.12); }
-.mode-btn:hover  { background: rgba(255,255,255,0.11); color: var(--text-body); }
+.mode-btn:first-child { border-left: 1px solid rgba(255,255,255,0.09); }
+.mode-btn:hover  { background: rgba(255,255,255,0.09); color: var(--text-primary); }
 .mode-btn.active { background: rgba(78,121,167,0.30); border-color: rgba(78,121,167,0.55);
                    color: var(--text-primary); }
 
@@ -96,15 +96,15 @@ html, body {
   padding: 0 14px;
   display: flex;
   align-items: center;
-  background: rgba(255,255,255,0.05);
+  background: rgba(255, 255, 255, 0.04);
   border: none;
-  border-left: 1px solid rgba(255,255,255,0.11);
+  border-left: 1px solid rgba(255,255,255,0.09);
   border-radius: 0;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
 }
-.topbar-btn:hover { background: rgba(255,255,255,0.10); color: var(--text-body); }
+.topbar-btn:hover { background: rgba(255,255,255,0.09); color: var(--text-primary); }
 
 /* ── Canvas ────────────────────────────────────────────────────────────── */
 #three-canvas {
@@ -379,7 +379,7 @@ html, body {
   font-size: var(--fs-secondary);
   font-weight: 600;
   padding: 2px 7px;
-  border-radius: 10px;
+  border-radius: 999px;
   background: rgba(78,121,167,0.25);
   color: var(--text-body);
   border: 1px solid rgba(78,121,167,0.45);
@@ -387,7 +387,7 @@ html, body {
 
 #recipe-stats {
   font-size: var(--fs-body);
-  color: var(--text-muted);
+  color: var(--text-secondary);
   margin-bottom: 10px;
   line-height: 1.7;
 }
@@ -395,7 +395,7 @@ html, body {
 #recipe-ingredients {
   font-size: var(--fs-body);
   line-height: 1.7;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   margin-bottom: 10px;
 }
 
@@ -755,14 +755,15 @@ html, body {
 
 .ht-meta {
   font-size: var(--fs-secondary);
-  color: var(--text-muted);
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 
 .ht-desc {
   font-size: var(--fs-secondary);
   line-height: 1.55;
-  color: var(--text-secondary);
+  color: var(--text-muted);
+  font-style: italic;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
