@@ -2021,16 +2021,15 @@ async function boot() {
   });
 
   // About modal
-  document.getElementById('btn-about').addEventListener('click', () => {
-    document.getElementById('about-overlay').classList.add('open');
+  const btnAbout = document.getElementById('btn-about');
+  const aboutOverlay = document.getElementById('about-overlay');
+  const closeAbout = () => { aboutOverlay.classList.remove('open'); btnAbout.classList.remove('active'); };
+  btnAbout.addEventListener('click', () => {
+    aboutOverlay.classList.add('open');
+    btnAbout.classList.add('active');
   });
-  document.getElementById('about-close').addEventListener('click', () => {
-    document.getElementById('about-overlay').classList.remove('open');
-  });
-  document.getElementById('about-overlay').addEventListener('click', e => {
-    if (e.target === document.getElementById('about-overlay'))
-      document.getElementById('about-overlay').classList.remove('open');
-  });
+  document.getElementById('about-close').addEventListener('click', closeAbout);
+  aboutOverlay.addEventListener('click', e => { if (e.target === aboutOverlay) closeAbout(); });
 
   // Share popup
   const sharePopup = document.getElementById('share-popup');
@@ -2042,9 +2041,11 @@ async function boot() {
     shareUrlInput.value = shareInclude.checked ? buildShareUrl() : plainUrl;
   };
 
-  document.getElementById('btn-share').addEventListener('click', () => {
+  const btnShare = document.getElementById('btn-share');
+  btnShare.addEventListener('click', () => {
     refreshShareUrl();
     sharePopup.classList.toggle('open');
+    btnShare.classList.toggle('active', sharePopup.classList.contains('open'));
   });
   shareInclude.addEventListener('change', refreshShareUrl);
   document.getElementById('share-copy').addEventListener('click', () => {
@@ -2056,6 +2057,7 @@ async function boot() {
   });
   document.getElementById('share-close').addEventListener('click', () => {
     sharePopup.classList.remove('open');
+    btnShare.classList.remove('active');
   });
   document.addEventListener('click', e => {
     if (!sharePopup.contains(e.target) && e.target !== document.getElementById('btn-share'))
