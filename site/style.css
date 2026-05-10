@@ -3,7 +3,7 @@
   /* Layout */
   --topbar-h:      36px;
   --panel-gap:     12px;
-  --panel-w:       clamp(340px, 20vw, 420px);
+  --panel-w:       clamp(360px, 20vw, 420px);
   --left-panel-w:  clamp(340px, 20vw, 360px);
   --left-panel-h:  clamp(320px, 50vh, 440px);
   --right-panel-h: clamp(420px, 80vh, 760px);
@@ -520,7 +520,8 @@ html, body {
   color: inherit;
   font-family: inherit;
 }
-.filter-chip-remove:hover { opacity: 1; }
+.filter-chip-remove:hover,
+.filter-chip:hover .filter-chip-remove { opacity: 1; }
 
 /* Right panel chart (replaces category list) */
 #right-panel-chart {

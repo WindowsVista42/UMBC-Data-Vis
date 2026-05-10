@@ -876,8 +876,17 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
   const maxCount = Math.max(...counts, 1);
 
   const W = container.offsetWidth || 300;
-  const rowH = 24;
-  const labelW = Math.min(Math.floor(W * 0.34), 112);
+  const MIN_ROW_H = 20;
+  const containerH = Math.max(0, (container.clientHeight || 0) - 12); // subtract padding: 6px 0
+  const rowH = containerH > 0
+    ? Math.max(MIN_ROW_H, containerH / labels.length)
+    : MIN_ROW_H;
+
+  // Measure longest label to align all bar starts consistently
+  const _ctx = document.createElement('canvas').getContext('2d');
+  _ctx.font = '11px "Source Serif 4", serif';
+  const maxTextW = Math.max(...labels.map(l => _ctx.measureText(shortenLabel(l)).width));
+  const labelW = Math.ceil(maxTextW) + 20;
   const barGap = 6;
   const countPad = 40;
   const barMaxW = W - labelW - barGap - countPad;
@@ -933,8 +942,8 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
     if (barW > 0) {
       const bar = g_row.append('rect')
         .attr('class', 'rpc-bar')
-        .attr('x', labelW + barGap).attr('y', 3)
-        .attr('width', barW).attr('height', rowH - 6)
+        .attr('x', labelW + barGap).attr('y', 2)
+        .attr('width', barW).attr('height', rowH - 4)
         .attr('rx', 2)
         .attr('fill', barColor)
         .attr('opacity', baseOpacity(li))
@@ -1114,6 +1123,8 @@ function makeChip(familyIdx, labelIdx, isPhantom, onRemove) {
   chip.style.borderColor = `rgba(${r},${g},${b},0.80)`;
   chip.textContent = label;
   if (onRemove && !isPhantom) {
+    chip.style.cursor = 'pointer';
+    chip.addEventListener('click', onRemove);
     const x = document.createElement('button');
     x.className = 'filter-chip-remove';
     x.textContent = '×';
@@ -1202,9 +1213,14 @@ function showPhantomChip(familyIdx, labelIdx) {
 }
 
 function clearPhantomChip() {
+  if (filterLevel >= 1) {
+    // showPhantomChip cleared the bar entirely — restore full state
+    renderFilterChips();
+    return;
+  }
   const bar = document.getElementById('breadcrumb-bar');
   bar.querySelectorAll('.filter-chip-phantom, .phantom-sep').forEach(e => e.remove());
-  if (filterLevel === 0 && !bar.querySelector('.filter-chip')) {
+  if (!bar.querySelector('.filter-chip')) {
     const txt = document.createElement('span');
     txt.className = 'flavor-text';
     txt.textContent = 'Hover to preview · Click to filter · Up to two categories';
