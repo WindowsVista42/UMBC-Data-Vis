@@ -109,28 +109,6 @@ let savedIntersectionState = null; // {activeFam, modes[]} saved before intersec
 const REVIEWS_YEAR_MIN = 1999;
 const REVIEWS_YEAR_MAX = 2018;
 
-const RECIPE_TABS = [
-  { id: 'ratings', label: 'Ratings' },
-  { id: 'reviews', label: 'Reviews / Year' },
-];
-const CLUSTER_TABS = [
-  { id: 'ratings',      label: 'Ratings' },
-  { id: 'reviews',      label: 'Reviews / Year' },
-  { separator: true },
-  { id: 'avg_rating',   label: 'Avg Rating' },
-  { id: 'cuisines',     label: 'Cuisine' },
-  { id: 'meal_types',   label: 'Meal Type' },
-  { id: 'minutes',      label: 'Cook Time' },
-  { id: 'n_ingredients',label: 'N Ingredients' },
-  { id: 'n_ratings',    label: 'N Ratings' },
-  { id: 'n_steps',      label: 'N Steps' },
-  { id: 'submitted',    label: 'Submitted' },
-];
-
-let activeRecipeTab = 'ratings';
-let activeClusterTab = 'reviews';
-let currentClusterFamily = null;
-let currentClusterLabel = null;
 
 let renderer, scene, camera, controls;
 let geometry, pointsMesh;
@@ -139,6 +117,12 @@ let catTexture = null;
 let activeFamilyIdx = 0;
 let categoryModes = new Int32Array(MAX_LABELS).fill(0);
 let highlightedLabelIdx = -1; // -1 = none
+
+// ── Filter state ─────────────────────────────────────────────────────────────
+let filterLevel = 0;      // 0=root, 1=L1 selected, 2=both selected
+let level1LabelIdx = -1;  // label index within activeFamilyIdx
+let level2FamilyIdx = -1; // family index for Level 2 chart
+let level2LabelIdx = -1;  // label index within level2 family
 
 let lockedIdx = -1;
 let hoverIdx = -1;   // currently hovered point index
@@ -371,7 +355,7 @@ function setHighlightLabel(labelIdx) {
       alphaCache[i] = famData[i] === labelIdx ? 1.0 : 0.0;
     }
   }
-  renderCategoryList();
+  if (appMode === 'explore') renderRightPanelChart(filterLevel === 0 ? activeFamilyIdx : level2FamilyIdx);
 }
 
 function applyHighlightLabels(labelIdxs) {
@@ -390,7 +374,6 @@ function applyHighlightLabels(labelIdxs) {
       alphaCache[i] = highlightLabelSet.has(famData[i]) ? 1.0 : 0.0;
     }
   }
-  renderCategoryList();
 }
 
 function applyIntersectionHighlight(secondaryFamName, secondaryLabel) {
@@ -423,14 +406,28 @@ function restoreIntersectionHighlight() {
 }
 
 function setActiveFamily(idx) {
-  activeFamilyIdx = idx;
-  highlightedLabelIdx = -1;
-  highlightLabelSet = null;
-  categoryModes.fill(0);
-  uniforms.uActiveFamilyIdx.value = idx;
-  uniforms.uCategoryModes.value = Array.from(categoryModes);
-  alphaCache.fill(1.0);
-  renderCategoryList();
+  if (filterLevel === 0) {
+    activeFamilyIdx = idx;
+    highlightedLabelIdx = -1;
+    highlightLabelSet = null;
+    categoryModes.fill(0);
+    uniforms.uActiveFamilyIdx.value = idx;
+    uniforms.uCategoryModes.value = Array.from(categoryModes);
+    alphaCache.fill(1.0);
+    renderRightPanelChart(idx);
+  } else if (filterLevel === 1) {
+    level2FamilyIdx = idx;
+    const filteredCounts = computeFilteredCounts(idx, activeFamilyIdx, level1LabelIdx);
+    renderRightPanelChart(idx, filteredCounts);
+  } else if (filterLevel === 2) {
+    level2FamilyIdx = idx;
+    level2LabelIdx = -1;
+    filterLevel = 1;
+    restoreIntersectionHighlight();
+    const filteredCounts = computeFilteredCounts(idx, activeFamilyIdx, level1LabelIdx);
+    renderRightPanelChart(idx, filteredCounts);
+    renderFilterChips();
+  }
 }
 
 function getCategoryFamilyData(familyIdx) {
@@ -779,7 +776,7 @@ function animate() {
   if (lockedIdx >= 0) positionHoverTip(lockedIdx);
 }
 
-// ── Right panel: category tabs + label list ───────────────────────────────────
+// ── Right panel: category tabs + horizontal bar chart ─────────────────────────
 function initRightPanel() {
   const tabsEl = document.getElementById('category-tabs');
   tabsEl.innerHTML = '';
@@ -794,67 +791,268 @@ function initRightPanel() {
     });
     tabsEl.appendChild(btn);
   });
-  renderCategoryList();
+  renderFilterChips();
+  renderRightPanelChart(activeFamilyIdx);
 }
 
-function renderCategoryList() {
-  const listEl = document.getElementById('category-list');
-  const family = meta.categories[activeFamilyIdx];
-  const famData = getCategoryFamilyData(activeFamilyIdx);
+function updateTabVisualState() {
+  document.querySelectorAll('.cat-tab').forEach((btn, i) => {
+    btn.classList.remove('tab-locked', 'tab-available');
+    if (filterLevel === 1) {
+      if (i === activeFamilyIdx) btn.classList.add('tab-locked');
+      else btn.classList.add('tab-available');
+    }
+  });
+}
 
-  // Count per label
+function computeFullCounts(familyIdx) {
+  const family = meta.categories[familyIdx];
+  const famData = getCategoryFamilyData(familyIdx);
   const counts = new Array(family.labels.length).fill(0);
   for (let i = 0; i < N; i++) {
     const id = famData[i];
     if (id < counts.length) counts[id]++;
   }
+  return counts;
+}
 
-  // Determine palette hex for this label
-  const palette = uniforms.uPalette.value;
-  const paletteN = uniforms.uPaletteN.value;
+function computeFilteredCounts(familyIdx, l1FamilyIdx, l1LabelIdx) {
+  const family = meta.categories[familyIdx];
+  const famData = getCategoryFamilyData(familyIdx);
+  const l1Data = getCategoryFamilyData(l1FamilyIdx);
+  const counts = new Array(family.labels.length).fill(0);
+  for (let i = 0; i < N; i++) {
+    if (l1Data[i] !== l1LabelIdx) continue;
+    const id = famData[i];
+    if (id < counts.length) counts[id]++;
+  }
+  return counts;
+}
 
-  const activeSet = highlightLabelSet ?? (highlightedLabelIdx >= 0 ? new Set([highlightedLabelIdx]) : new Set());
-  const hasHighlight = activeSet.size > 0;
+function renderRightPanelChart(familyIdx, scopedCounts) {
+  const container = document.getElementById('right-panel-chart');
+  if (!container || !meta) return;
 
-  listEl.innerHTML = '';
-  family.labels.forEach((label, labelIdx) => {
-    const isActive = activeSet.has(labelIdx);
-    const row = document.createElement('div');
-    row.className = 'cat-row' + (isActive ? ' active' : '');
+  const family = meta.categories[familyIdx];
+  const counts = scopedCounts ?? computeFullCounts(familyIdx);
+  const labels = family.labels;
+  const maxCount = Math.max(...counts, 1);
 
-    const palBase = labelIdx % paletteN;
-    const r = Math.round(palette[palBase * 3] * 255);
-    const g = Math.round(palette[palBase * 3 + 1] * 255);
-    const b = Math.round(palette[palBase * 3 + 2] * 255);
-    const hex = `rgb(${r},${g},${b})`;
+  const W = container.offsetWidth || 300;
+  const rowH = 22;
+  const labelW = 110;
+  const barGap = 6;
+  const countPad = 36;
+  const barMaxW = W - labelW - barGap - countPad;
+  const H = rowH * labels.length;
 
-    const dot = document.createElement('span');
-    dot.className = 'cat-dot';
-    dot.style.background = hex;
+  container.innerHTML = '';
+  const svg = d3.select(container).append('svg')
+    .attr('width', W).attr('height', H)
+    .style('display', 'block').style('overflow', 'visible');
 
-    const nameEl = document.createElement('span');
-    nameEl.className = 'cat-label' + (hasHighlight && !isActive ? ' dimmed' : '');
-    nameEl.textContent = label;
+  const FONT = '"Source Serif 4", serif';
+  const TEXT_DIM = 'rgba(255,255,255,0.52)';
+  const TEXT_BODY = 'rgba(255,255,255,0.88)';
 
-    const countEl = document.createElement('span');
-    countEl.className = 'cat-count';
-    countEl.textContent = counts[labelIdx].toLocaleString();
+  labels.forEach((label, li) => {
+    const count = counts[li];
+    const barW = count > 0 ? Math.max(2, (count / maxCount) * barMaxW) : 0;
+    const y = li * rowH;
+    const [r, g, b] = getPaletteRgb(li);
+    const barColor = `rgba(${r},${g},${b},0.75)`;
+    const isL1Selected = filterLevel >= 1 && familyIdx === activeFamilyIdx && li === level1LabelIdx;
+    const isL2Selected = filterLevel >= 2 && familyIdx === level2FamilyIdx && li === level2LabelIdx;
 
-    row.appendChild(dot);
-    row.appendChild(nameEl);
-    row.appendChild(countEl);
+    const g_row = svg.append('g').attr('transform', `translate(0,${y})`);
 
-    row.addEventListener('click', () => {
-      if (highlightedLabelIdx === labelIdx) {
-        setHighlightLabel(-1);
-      } else {
-        setHighlightLabel(labelIdx);
-        if (appMode === 'explore') showClusterInfo(labelIdx);
-      }
-    });
+    // Label
+    g_row.append('text')
+      .attr('x', labelW - 6).attr('y', rowH / 2)
+      .attr('text-anchor', 'end').attr('dominant-baseline', 'middle')
+      .attr('font-size', '11px').attr('font-family', FONT)
+      .attr('fill', (isL1Selected || isL2Selected) ? TEXT_BODY : TEXT_DIM)
+      .attr('font-weight', (isL1Selected || isL2Selected) ? '600' : '400')
+      .text(label);
 
-    listEl.appendChild(row);
+    // Bar
+    if (barW > 0) {
+      g_row.append('rect')
+        .attr('x', labelW + barGap).attr('y', 3)
+        .attr('width', barW).attr('height', rowH - 6)
+        .attr('rx', 2)
+        .attr('fill', barColor)
+        .attr('opacity', (filterLevel > 0 && !isL1Selected && !isL2Selected) ? 0.4 : 0.88);
+    }
+
+    // Count
+    if (count > 0) {
+      g_row.append('text')
+        .attr('x', labelW + barGap + barW + 4).attr('y', rowH / 2)
+        .attr('dominant-baseline', 'middle')
+        .attr('font-size', '10px').attr('font-family', FONT)
+        .attr('fill', TEXT_DIM)
+        .text(count >= 1000 ? d3.format('.2s')(count) : count);
+    }
+
+    // Hit rect
+    if (count > 0) {
+      g_row.append('rect')
+        .attr('x', 0).attr('y', 0)
+        .attr('width', W).attr('height', rowH)
+        .attr('fill', 'transparent')
+        .style('cursor', 'pointer')
+        .on('mouseenter', () => {
+          if (appMode !== 'explore') return;
+          // Light highlight: mode 1 for all, mode 0 for hovered
+          const modes = Array.from(categoryModes);
+          const nLabels = meta.categories[activeFamilyIdx].labels.length;
+          for (let j = 0; j < MAX_LABELS; j++) modes[j] = j < nLabels ? 1 : 0;
+          if (familyIdx === activeFamilyIdx) modes[li] = 0;
+          uniforms.uCategoryModes.value = modes;
+          showPhantomChip(familyIdx, li);
+        })
+        .on('mouseleave', () => {
+          if (appMode !== 'explore') return;
+          uniforms.uCategoryModes.value = Array.from(categoryModes);
+          clearPhantomChip();
+        })
+        .on('click', () => {
+          if (appMode !== 'explore') return;
+          if (filterLevel === 0) {
+            transitionToLevel1(familyIdx, li);
+          } else if (filterLevel === 1) {
+            if (familyIdx === activeFamilyIdx && li === level1LabelIdx) {
+              resetToLevel0();
+            } else {
+              transitionToLevel2(familyIdx, li);
+            }
+          } else if (filterLevel === 2) {
+            if (familyIdx === level2FamilyIdx && li === level2LabelIdx) {
+              resetToLevel1();
+            } else {
+              transitionToLevel2(familyIdx, li);
+            }
+          }
+        });
+    }
   });
+}
+
+// ── Filter state machine ──────────────────────────────────────────────────────
+function transitionToLevel1(familyIdx, labelIdx) {
+  filterLevel = 1;
+  level1LabelIdx = labelIdx;
+  // activeFamilyIdx stays as the L1 family
+  setHighlightLabel(labelIdx);
+  updateTabVisualState();
+
+  // Switch active tab to first family that isn't the L1 family
+  const l2Idx = meta.categories.findIndex((_, i) => i !== familyIdx);
+  level2FamilyIdx = l2Idx >= 0 ? l2Idx : familyIdx;
+  document.querySelectorAll('.cat-tab').forEach((btn, i) => {
+    btn.classList.toggle('active', i === level2FamilyIdx);
+  });
+
+  const filteredCounts = computeFilteredCounts(level2FamilyIdx, activeFamilyIdx, level1LabelIdx);
+  renderRightPanelChart(level2FamilyIdx, filteredCounts);
+  renderFilterChips();
+}
+
+function transitionToLevel2(familyIdx, labelIdx) {
+  filterLevel = 2;
+  level2FamilyIdx = familyIdx;
+  level2LabelIdx = labelIdx;
+  const family = meta.categories[familyIdx];
+  const label = family.labels[labelIdx];
+  applyIntersectionHighlight(family.name, label);
+  renderRightPanelChart(familyIdx, computeFilteredCounts(familyIdx, activeFamilyIdx, level1LabelIdx));
+  renderFilterChips();
+}
+
+function resetToLevel0() {
+  filterLevel = 0;
+  level1LabelIdx = -1;
+  level2FamilyIdx = -1;
+  level2LabelIdx = -1;
+  restoreIntersectionHighlight();
+  setHighlightLabel(-1);
+  updateTabVisualState();
+  document.querySelectorAll('.cat-tab').forEach((btn, i) => {
+    btn.classList.toggle('active', i === activeFamilyIdx);
+  });
+  renderRightPanelChart(activeFamilyIdx);
+  renderFilterChips();
+}
+
+function resetToLevel1() {
+  filterLevel = 1;
+  level2LabelIdx = -1;
+  restoreIntersectionHighlight();
+  const filteredCounts = computeFilteredCounts(level2FamilyIdx, activeFamilyIdx, level1LabelIdx);
+  renderRightPanelChart(level2FamilyIdx, filteredCounts);
+  renderFilterChips();
+}
+
+// ── Filter chip rendering ─────────────────────────────────────────────────────
+function makeChip(familyIdx, labelIdx, isPhantom, onRemove) {
+  const [r, g, b] = getPaletteRgb(labelIdx);
+  const label = meta.categories[familyIdx].labels[labelIdx];
+  const chip = document.createElement('span');
+  chip.className = 'filter-chip' + (isPhantom ? ' filter-chip-phantom' : '');
+  chip.style.background = `rgba(${r},${g},${b},0.35)`;
+  chip.style.borderColor = `rgba(${r},${g},${b},0.80)`;
+  chip.textContent = label;
+  if (onRemove && !isPhantom) {
+    const x = document.createElement('button');
+    x.className = 'filter-chip-remove';
+    x.textContent = '×';
+    x.addEventListener('click', e => { e.stopPropagation(); onRemove(); });
+    chip.appendChild(x);
+  }
+  return chip;
+}
+
+function renderFilterChips() {
+  const bar = document.getElementById('breadcrumb-bar');
+  bar.innerHTML = '';
+  if (filterLevel === 0) {
+    const txt = document.createElement('span');
+    txt.className = 'flavor-text';
+    txt.textContent = 'Hover to preview · Click to filter';
+    bar.appendChild(txt);
+    return;
+  }
+  bar.appendChild(makeChip(activeFamilyIdx, level1LabelIdx, false, resetToLevel0));
+  if (filterLevel === 2) {
+    const sep = document.createElement('span');
+    sep.className = 'flavor-text';
+    sep.style.margin = '0 2px';
+    sep.textContent = '→';
+    bar.appendChild(sep);
+    bar.appendChild(makeChip(level2FamilyIdx, level2LabelIdx, false, resetToLevel1));
+  }
+}
+
+function showPhantomChip(familyIdx, labelIdx) {
+  const bar = document.getElementById('breadcrumb-bar');
+  // Clear any existing phantom
+  bar.querySelectorAll('.filter-chip-phantom').forEach(e => e.remove());
+  // Add phantom after real chips (or replace flavor text)
+  if (filterLevel === 0) bar.innerHTML = '';
+  bar.appendChild(makeChip(familyIdx, labelIdx, true, null));
+}
+
+function clearPhantomChip() {
+  const bar = document.getElementById('breadcrumb-bar');
+  bar.querySelectorAll('.filter-chip-phantom').forEach(e => e.remove());
+  // If we emptied it (was level 0), restore flavor text
+  if (filterLevel === 0 && !bar.querySelector('.filter-chip')) {
+    const txt = document.createElement('span');
+    txt.className = 'flavor-text';
+    txt.textContent = 'Hover to preview · Click to filter';
+    bar.appendChild(txt);
+  }
 }
 
 // ── Left panel: explore mode ──────────────────────────────────────────────────
@@ -882,28 +1080,23 @@ function randomizeRecipe() {
 }
 
 function showExploreDefault() {
-  restoreIntersectionHighlight();
+  document.getElementById('left-panel').style.display = 'none';
   document.getElementById('explore-default').style.display = 'flex';
-  document.getElementById('explore-content').style.display = 'none';
-  document.getElementById('explore-panel-footer').style.display = 'none';
-  hideChartPanel();
+  hideLeftPanelChart();
 }
 
 function showRecipeInfo(idx) {
   document.getElementById('explore-default').style.display = 'none';
+  document.getElementById('left-panel').style.display = 'flex';
+  document.getElementById('left-panel').style.opacity = '0';
+  requestAnimationFrame(() => { document.getElementById('left-panel').style.opacity = '1'; });
   document.getElementById('explore-content').style.display = 'block';
   document.getElementById('explore-recipe').style.display = 'block';
   document.getElementById('explore-cluster').style.display = 'none';
-  document.getElementById('cluster-chart-tabs').innerHTML = '';
-  document.getElementById('explore-panel-footer').style.display = 'block';
+  hideLeftPanelChart();
 
-  renderChartTabs('recipe-chart-tabs', RECIPE_TABS, activeRecipeTab, tabId => {
-    activeRecipeTab = tabId;
-    if (tabId === null) { hideChartPanel(); return; }
-    showRecipeChart(recipeIds[lockedIdx], tabId);
-  });
-  hideChartPanel();
-  if (activeRecipeTab) showRecipeChart(recipeIds[idx]);
+  // Render "Show X" buttons after metrics load
+  document.getElementById('recipe-chart-btns').innerHTML = '';
 
   // Show placeholder immediately, fill in async
   document.getElementById('recipe-name').textContent = `Recipe #${recipeIds[idx]}`;
@@ -955,6 +1148,36 @@ function showRecipeInfo(idx) {
       document.getElementById('recipe-description').textContent =
         desc.length > 220 ? desc.slice(0, 220) + '…' : desc;
     }
+
+    // "Show X" chart buttons — loaded after metrics resolve
+    renderRecipeChartButtons(recipeIds[idx]);
+  });
+}
+
+async function renderRecipeChartButtons(recipeId) {
+  const btnsEl = document.getElementById('recipe-chart-btns');
+  btnsEl.innerHTML = '';
+  const shard = String(recipeId).slice(-2).padStart(2, '0');
+  if (!recipeMetricsCache.has(shard)) {
+    try {
+      const ab = await fetch(`${DATA}recipe_metrics/${shard}.json.gz`).then(r => r.ok ? r.arrayBuffer() : null);
+      recipeMetricsCache.set(shard, ab ? await decompressJson(ab) : {});
+    } catch { recipeMetricsCache.set(shard, {}); }
+  }
+  const metrics = recipeMetricsCache.get(shard)?.[String(recipeId)];
+  const hasRatings = !!(metrics?.n_ratings);
+  const hasReviews = !!(metrics?.n_reviews);
+  [
+    { label: 'Show Ratings', tabId: 'ratings', enabled: hasRatings },
+    { label: 'Show Reviews / Year', tabId: 'reviews', enabled: hasReviews },
+  ].forEach(({ label, tabId, enabled }) => {
+    const btn = document.createElement('button');
+    btn.className = 'recipe-chart-btn' + (enabled ? '' : ' disabled');
+    btn.textContent = label;
+    if (enabled) {
+      btn.addEventListener('click', () => showRecipeChartInPanel(recipeId, tabId, label));
+    }
+    btnsEl.appendChild(btn);
   });
 }
 
@@ -967,26 +1190,74 @@ function showClusterInfo(labelIdx) {
   for (let i = 0; i < N; i++) if (famData[i] === labelIdx) count++;
 
   document.getElementById('explore-default').style.display = 'none';
+  document.getElementById('left-panel').style.display = 'flex';
+  document.getElementById('left-panel').style.opacity = '0';
+  requestAnimationFrame(() => { document.getElementById('left-panel').style.opacity = '1'; });
   document.getElementById('explore-content').style.display = 'block';
   document.getElementById('explore-recipe').style.display = 'none';
   document.getElementById('explore-cluster').style.display = 'block';
-  document.getElementById('recipe-chart-tabs').innerHTML = '';
-  document.getElementById('explore-panel-footer').style.display = 'block';
+  hideLeftPanelChart();
   document.getElementById('cluster-name').textContent = label;
   document.getElementById('cluster-count').textContent = `${count.toLocaleString()} recipes`;
-
-  currentClusterFamily = family.name;
-  currentClusterLabel = label;
-  renderChartTabs('cluster-chart-tabs', CLUSTER_TABS, activeClusterTab, tabId => {
-    activeClusterTab = tabId;
-    if (tabId === null) { hideChartPanel(); return; }
-    showClusterChart(currentClusterFamily, currentClusterLabel, tabId);
-  });
-  if (activeClusterTab) showClusterChart(family.name, label, activeClusterTab);
 }
 
-// ── Chart panel ───────────────────────────────────────────────────────────────
+// ── Left panel chart view ─────────────────────────────────────────────────────
+function showLeftPanelChart(title, renderFn) {
+  document.getElementById('explore-content').style.display = 'none';
+  const view = document.getElementById('left-panel-chart-view');
+  view.style.display = 'flex';
+  document.getElementById('left-panel-chart-title').textContent = title;
+  const body = document.getElementById('left-panel-chart-body');
+  body.innerHTML = '';
+  requestAnimationFrame(() => renderFn(body));
+}
+
+function hideLeftPanelChart() {
+  document.getElementById('left-panel-chart-view').style.display = 'none';
+  document.getElementById('left-panel-chart-body').innerHTML = '';
+}
+
+async function showRecipeChartInPanel(recipeId, tabId, title) {
+  const shard = String(recipeId).slice(-2).padStart(2, '0');
+  const metrics = recipeMetricsCache.get(shard)?.[String(recipeId)];
+  if (!metrics) return;
+
+  showLeftPanelChart(title, body => {
+    if (tabId === 'ratings') {
+      const idxMap = { '1 star': 1, '2 stars': 2, '3 stars': 3, '4 stars': 4, '5 stars': 7 };
+      const labels = ['1 star', '2 stars', '3 stars', '4 stars', '5 stars'];
+      const counts = [metrics.count_1, metrics.count_2, metrics.count_3, metrics.count_4, metrics.count_5];
+      const colors = labels.map(lbl => {
+        const avgFam = meta?.categories.find(c => c.name === 'avg_rating');
+        const li = idxMap[lbl];
+        if (!avgFam || li == null) return '#4e79a7';
+        const [r, g, b] = getPaletteRgb(li);
+        return `rgb(${r},${g},${b})`;
+      });
+      const stat = document.createElement('div');
+      stat.className = 'chart-stat-header';
+      stat.innerHTML =
+        `<span class="chart-stat-avg">${metrics.avg_rating?.toFixed(1) ?? '—'}</span>` +
+        `<span class="chart-stat-meta"> · ${(metrics.n_ratings ?? 0).toLocaleString()} ratings</span>`;
+      body.appendChild(stat);
+      const chartEl = document.createElement('div');
+      body.appendChild(chartEl);
+      renderChart(chartEl, { chartType: 'histogram', labels, counts, colors, yLabel: 'Ratings' }, null);
+    } else if (tabId === 'reviews') {
+      const labels = [], counts = [];
+      for (let y = REVIEWS_YEAR_MIN; y <= REVIEWS_YEAR_MAX; y++) {
+        labels.push(String(y));
+        counts.push(metrics.n_per_year?.[y] ?? 0);
+      }
+      const colors = resolveDistColors('submitted', labels);
+      renderChart(body, { chartType: 'histogram', labels, counts, colors, yLabel: 'Reviews' }, null);
+    }
+  });
+}
+
+// ── Chart panel (story mode only) ─────────────────────────────────────────────
 function showChartPanel(config, data) {
+  if (appMode === 'explore') return;
   document.getElementById('chart-panel-title').textContent = config.title || '';
   const body = document.getElementById('chart-panel-body');
   body.innerHTML = '';
@@ -995,6 +1266,7 @@ function showChartPanel(config, data) {
 }
 
 function hideChartPanel() {
+  if (appMode === 'explore') return;
   restoreIntersectionHighlight();
   document.getElementById('chart-panel').classList.remove('open');
   document.getElementById('chart-panel-body').innerHTML = '';
@@ -1302,35 +1574,6 @@ function renderChart(container, config, data) {
   }
 }
 
-// ── Explore charts ────────────────────────────────────────────────────────────
-function renderChartTabs(containerId, tabs, activeTab, onClick) {
-  const el = document.getElementById(containerId);
-  el.innerHTML = '';
-  tabs.forEach(tab => {
-    if (tab.separator) {
-      const sep = document.createElement('span');
-      sep.className = 'tab-group-separator';
-      el.appendChild(sep);
-      return;
-    }
-    const { id, label } = tab;
-    const btn = document.createElement('button');
-    btn.className = 'chart-tab' + (id === activeTab ? ' active' : '');
-    btn.textContent = label;
-    btn.dataset.tabId = id;
-    btn.addEventListener('click', () => {
-      const isActive = btn.classList.contains('active');
-      el.querySelectorAll('.chart-tab').forEach(b => b.classList.remove('active'));
-      if (!isActive) {
-        btn.classList.add('active');
-        onClick(id);
-      } else {
-        onClick(null);
-      }
-    });
-    el.appendChild(btn);
-  });
-}
 
 function resolveDistColors(familyName, labels) {
   const fam = meta?.categories.find(c => c.name === familyName);
@@ -1343,161 +1586,6 @@ function resolveDistColors(familyName, labels) {
   });
 }
 
-async function showRecipeChart(recipeId, tabId = activeRecipeTab) {
-  const shard = String(recipeId).slice(-2).padStart(2, '0');
-
-  if (!recipeMetricsCache.has(shard)) {
-    try {
-      const ab = await fetch(`${DATA}recipe_metrics/${shard}.json.gz`).then(r => r.ok ? r.arrayBuffer() : null);
-      const data = ab ? await decompressJson(ab) : {};
-      recipeMetricsCache.set(shard, data);
-    } catch { recipeMetricsCache.set(shard, {}); }
-  }
-
-  const metrics = recipeMetricsCache.get(shard)?.[String(recipeId)];
-  const hasRatings = !!(metrics?.n_ratings);
-  const hasReviews = !!(metrics?.n_reviews);
-
-  document.querySelectorAll('#recipe-chart-tabs .chart-tab').forEach(btn => {
-    const tid = btn.dataset.tabId;
-    const enabled = (tid === 'ratings' && hasRatings) || (tid === 'reviews' && hasReviews);
-    btn.classList.toggle('disabled', !enabled);
-  });
-
-  if (!tabId || (tabId === 'ratings' && !hasRatings) || (tabId === 'reviews' && !hasReviews)) {
-    hideChartPanel();
-    return;
-  }
-
-  const body = document.getElementById('chart-panel-body');
-  body.innerHTML = '';
-  document.getElementById('chart-panel').classList.add('open');
-
-  if (tabId === 'ratings') {
-    const idxMap = { '1 star': 1, '2 stars': 2, '3 stars': 3, '4 stars': 4, '5 stars': 7 };
-    const labels = ['1 star', '2 stars', '3 stars', '4 stars', '5 stars'];
-    const counts = [metrics.count_1, metrics.count_2, metrics.count_3, metrics.count_4, metrics.count_5];
-    const colors = labels.map(lbl => {
-      const avgFam = meta?.categories.find(c => c.name === 'avg_rating');
-      const li = idxMap[lbl];
-      if (!avgFam || li == null) return '#4e79a7';
-      const [r, g, b] = getPaletteRgb(li);
-      return `rgb(${r},${g},${b})`;
-    });
-
-    document.getElementById('chart-panel-title').textContent = 'Ratings';
-    const stat = document.createElement('div');
-    stat.className = 'chart-stat-header';
-    stat.innerHTML =
-      `<span class="chart-stat-avg">${metrics.avg_rating?.toFixed(1) ?? '—'}</span>` +
-      `<span class="chart-stat-meta"> · ${metrics.n_ratings.toLocaleString()} rating${metrics.n_ratings !== 1 ? 's' : ''}</span>`;
-    body.appendChild(stat);
-    const chartEl = document.createElement('div');
-    body.appendChild(chartEl);
-    requestAnimationFrame(() => renderChart(chartEl, { chartType: 'histogram', labels, counts, colors, yLabel: 'Ratings' }, null));
-
-  } else if (tabId === 'reviews') {
-    const labels = [], counts = [];
-    for (let y = REVIEWS_YEAR_MIN; y <= REVIEWS_YEAR_MAX; y++) {
-      labels.push(String(y));
-      counts.push(metrics.n_per_year[y] ?? 0);
-    }
-    const colors = resolveDistColors('submitted', labels);
-    document.getElementById('chart-panel-title').textContent = 'Reviews / Year';
-    requestAnimationFrame(() => renderChart(body, { chartType: 'histogram', labels, counts, colors, yLabel: 'Reviews' }, null));
-  }
-}
-
-async function showClusterChart(familyName, label, tabId = activeClusterTab) {
-  restoreIntersectionHighlight();
-  if (!categoryMetricsIndex) return;
-
-  const filename = categoryMetricsIndex[familyName]?.[label];
-  if (!filename) return;
-
-  if (!categoryMetricsCache.has(filename)) {
-    try {
-      const ab = await fetch(`${DATA}category_metrics/${filename}`).then(r => r.ok ? r.arrayBuffer() : null);
-      const data = ab ? await decompressJson(ab) : null;
-      categoryMetricsCache.set(filename, data);
-    } catch { return; }
-  }
-
-  const d = categoryMetricsCache.get(filename);
-  if (!d) return;
-
-  if (tabId === 'reviews') {
-    const npy = d.reviews?.n_per_year ?? {};
-    const labels = [], counts = [];
-    for (let y = REVIEWS_YEAR_MIN; y <= REVIEWS_YEAR_MAX; y++) {
-      labels.push(String(y));
-      counts.push(npy[y] ?? 0);
-    }
-    const colors = resolveDistColors('submitted', labels);
-    showChartPanel({ chartType: 'histogram', title: 'Reviews / Year', labels, counts, colors, yLabel: 'Reviews' }, null);
-
-  } else if (tabId === 'ratings') {
-    if (!d.reviews?.count_1 && !d.reviews?.count_5) return;
-    const idxMap = { '1 star': 1, '2 stars': 2, '3 stars': 3, '4 stars': 4, '5 stars': 7 };
-    const labels = ['1 star', '2 stars', '3 stars', '4 stars', '5 stars'];
-    const counts = [d.reviews.count_1, d.reviews.count_2, d.reviews.count_3, d.reviews.count_4, d.reviews.count_5];
-    const colors = labels.map(lbl => {
-      const avgFam = meta?.categories.find(c => c.name === 'avg_rating');
-      const li = idxMap[lbl];
-      if (!avgFam || li == null) return '#4e79a7';
-      const [r, g, b] = getPaletteRgb(li);
-      return `rgb(${r},${g},${b})`;
-    });
-
-    const body = document.getElementById('chart-panel-body');
-    body.innerHTML = '';
-    document.getElementById('chart-panel-title').textContent = 'Ratings';
-    document.getElementById('chart-panel').classList.add('open');
-    const avg = d.reviews?.avg_rating;
-    const total = d.reviews?.total_reviews ?? 0;
-    const stat = document.createElement('div');
-    stat.className = 'chart-stat-header';
-    stat.innerHTML =
-      `<span class="chart-stat-avg">${avg?.toFixed(1) ?? '—'}</span>` +
-      `<span class="chart-stat-meta"> · ${total.toLocaleString()} reviews</span>`;
-    body.appendChild(stat);
-    const chartEl = document.createElement('div');
-    body.appendChild(chartEl);
-    requestAnimationFrame(() => renderChart(chartEl, { chartType: 'histogram', labels, counts, colors, yLabel: 'Recipes' }, null));
-
-  } else {
-    const dist = d[tabId];
-    if (!dist) return;
-    let labels, counts;
-    if (tabId === 'submitted') {
-      labels = []; counts = [];
-      for (let y = REVIEWS_YEAR_MIN; y <= REVIEWS_YEAR_MAX; y++) {
-        labels.push(String(y));
-        counts.push(dist[y] ?? 0);
-      }
-    } else {
-      labels = Object.keys(dist);
-      counts = labels.map(l => dist[l]);
-    }
-    const colors = resolveDistColors(tabId, labels);
-    const titles = {
-      minutes: 'Cook Time',
-      n_ingredients: 'N Ingredients',
-      n_steps: 'N Steps',
-      n_ratings:  'N Ratings',
-      avg_rating: 'Avg Rating',
-      submitted:  'Submitted',
-      cuisines: 'Cuisine',
-      meal_types: 'Meal Type',
-    };
-    showChartPanel({
-      chartType: 'histogram', title: titles[tabId] ?? tabId,
-      labels, counts, colors, yLabel: 'Recipes',
-      onBarEnter: lbl => applyIntersectionHighlight(tabId, lbl),
-      onBarLeave: restoreIntersectionHighlight,
-    }, null);
-  }
-}
 
 // ── Left panel: story mode ────────────────────────────────────────────────────
 function applyStep(step) {
@@ -1591,20 +1679,22 @@ function setMode(mode) {
   document.getElementById('story-panel').style.display = mode === 'story' ? 'flex' : 'none';
   document.getElementById('explore-panel').style.display = mode === 'explore' ? 'flex' : 'none';
   document.getElementById('btn-randomize').style.display = mode === 'explore' ? 'block' : 'none';
-
   document.getElementById('right-column').classList.toggle('story-mode', mode === 'story');
 
   if (mode === 'explore') {
     highlightLabelSet = null;
     setHighlightLabel(-1);
-    showExploreDefault();
     lockedIdx = -1;
     hideHoverTip();
-    hideChartPanel();
+    hideLeftPanelChart();
+    showExploreDefault();
     document.getElementById('btn-randomize').textContent = 'Surprise Me';
   } else {
     lockedIdx = -1;
     hideHoverTip();
+    document.getElementById('left-panel').style.display = 'flex';
+    document.getElementById('explore-default').style.display = 'none';
+    resetToLevel0();
     restoreIntersectionHighlight();
     applyStep(storyData.steps[currentStep]);
   }
@@ -1781,6 +1871,12 @@ async function boot() {
     btnRandomize.textContent = available[Math.floor(Math.random() * available.length)];
   });
   document.getElementById('btn-explore').addEventListener('click', () => setMode('explore'));
+
+  // Left panel chart back button
+  document.getElementById('btn-chart-back').addEventListener('click', () => {
+    hideLeftPanelChart();
+    document.getElementById('explore-content').style.display = 'block';
+  });
 
   // About modal
   document.getElementById('btn-about').addEventListener('click', () => {

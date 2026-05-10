@@ -34,6 +34,21 @@
   <!-- ── 3D canvas ── -->
   <canvas id="three-canvas"></canvas>
 
+  <!-- ── Explore default: floats over canvas, no panel background ── -->
+  <div id="explore-default">
+    <h2 class="explore-title">Explore Recipes</h2>
+    <p class="explore-blurb">230,000 recipes from Food.com, arranged by semantic similarity.</p>
+    <div class="explore-hints">
+      <p><strong>Left-click drag</strong> to rotate</p>
+      <p><strong>Right-click drag</strong> to pan</p>
+      <p><strong>Scroll</strong> to zoom</p>
+      <hr class="explore-divider">
+      <p><strong>Hover a point</strong> for a tooltip</p>
+      <p><strong>Click a point</strong> for recipe info</p>
+      <p><strong>Double-click a point</strong> to isolate its cluster</p>
+    </div>
+  </div>
+
   <!-- ── Left panel ── -->
   <div id="left-panel">
 
@@ -49,19 +64,6 @@
 
     <!-- Explore mode -->
     <div id="explore-panel">
-      <div id="explore-default">
-        <h2 class="explore-title">Explore Recipes</h2>
-        <p class="explore-blurb">230,000 recipes from Food.com, arranged by semantic similarity.</p>
-        <div class="explore-hints">
-          <p><strong>Left-click drag</strong> to rotate</p>
-          <p><strong>Right-click drag</strong> to pan</p>
-          <p><strong>Scroll</strong> to zoom</p>
-          <hr class="explore-divider">
-          <p><strong>Hover a point</strong> for a tooltip</p>
-          <p><strong>Click a point</strong> for recipe info</p>
-          <p><strong>Double-click a point</strong> to isolate its cluster</p>
-        </div>
-      </div>
       <div id="explore-content">
         <div id="explore-recipe">
           <div id="recipe-name"></div>
@@ -69,21 +71,25 @@
           <div id="recipe-stats"></div>
           <div id="recipe-ingredients"></div>
           <div id="recipe-description"></div>
+          <div id="recipe-chart-btns"></div>
         </div>
         <div id="explore-cluster">
           <div id="cluster-name"></div>
           <div id="cluster-count"></div>
         </div>
-      </div><!-- end explore-content -->
-      <div id="explore-panel-footer">
-        <div id="recipe-chart-tabs" class="chart-tab-bar"></div>
-        <div id="cluster-chart-tabs" class="chart-tab-bar"></div>
+      </div>
+      <div id="left-panel-chart-view">
+        <div id="left-panel-chart-header">
+          <button id="btn-chart-back">&#8592; Back</button>
+          <span id="left-panel-chart-title"></span>
+        </div>
+        <div id="left-panel-chart-body"></div>
       </div>
     </div>
 
   </div>
 
-  <!-- ── Randomize button (explore mode only, below left panel) ── -->
+  <!-- ── Randomize button (explore mode only) ── -->
   <button id="btn-randomize">Surprise Me</button>
 
   <!-- ── Right column ── -->
@@ -91,8 +97,9 @@
 
     <div id="right-panel">
       <div id="right-panel-label">CATEGORIES</div>
+      <div id="breadcrumb-bar"></div>
       <div id="category-tabs"></div>
-      <div id="category-list"></div>
+      <div id="right-panel-chart"></div>
     </div>
 
   </div>
@@ -135,14 +142,13 @@
     </label>
   </div>
 
-  <!-- ── Chart panel ── -->
+  <!-- ── Chart panel (story mode only) ── -->
   <div id="chart-panel">
     <div id="chart-panel-header">
       <span id="chart-panel-title"></span>
     </div>
     <div id="chart-panel-body"></div>
   </div>
-
 
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <script type="module" src="app.js"></script>
