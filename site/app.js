@@ -1152,34 +1152,6 @@ function makeChip(familyIdx, labelIdx, isPhantom, onRemove) {
   return chip;
 }
 
-function renderFilterStatus(phantomFamilyIdx = -1, phantomLabelIdx = -1) {
-  const el = document.getElementById('filter-status');
-  el.innerHTML = '';
-  const hasPhantom = phantomFamilyIdx >= 0;
-  const hasL1 = filterLevel >= 1;
-  const hasL2 = filterLevel >= 2;
-
-  if (!hasL1 && !hasPhantom) { el.classList.remove('visible'); return; }
-  el.classList.add('visible');
-
-  const txt = s => { const sp = document.createElement('span'); sp.textContent = s; return sp; };
-  el.appendChild(txt('Showing recipes with'));
-
-  if (hasL1) {
-    el.appendChild(makeChip(activeFamilyIdx, level1LabelIdx, false, null));
-  } else {
-    el.appendChild(makeChip(phantomFamilyIdx, phantomLabelIdx, true, null));
-    return;
-  }
-
-  if (hasL2) {
-    el.appendChild(txt('and'));
-    el.appendChild(makeChip(level2FamilyIdx, level2LabelIdx, false, null));
-  } else if (hasPhantom) {
-    el.appendChild(txt('and'));
-    el.appendChild(makeChip(phantomFamilyIdx, phantomLabelIdx, true, null));
-  }
-}
 
 function renderFilterChips() {
   const bar = document.getElementById('breadcrumb-bar');
@@ -1189,7 +1161,6 @@ function renderFilterChips() {
     txt.className = 'flavor-text';
     txt.textContent = 'Hover to preview · Click to filter · Up to two categories';
     bar.appendChild(txt);
-    renderFilterStatus();
     return;
   }
   const txt = s => { const sp = document.createElement('span'); sp.className = 'flavor-text'; sp.textContent = s; return sp; };
@@ -1203,7 +1174,6 @@ function renderFilterChips() {
     bar.appendChild(txt('with'));
     bar.appendChild(makeChip(level2FamilyIdx, level2LabelIdx, false, resetToLevel1));
   }
-  renderFilterStatus();
 }
 
 function showPhantomChip(familyIdx, labelIdx) {
@@ -1227,7 +1197,6 @@ function showPhantomChip(familyIdx, labelIdx) {
     bar.appendChild(txt('with'));
     bar.appendChild(makeChip(familyIdx, labelIdx, true, null));
   }
-  renderFilterStatus(familyIdx, labelIdx);
 }
 
 function clearPhantomChip() {
@@ -1244,7 +1213,6 @@ function clearPhantomChip() {
     txt.textContent = 'Hover to preview · Click to filter · Up to two categories';
     bar.appendChild(txt);
   }
-  renderFilterStatus();
 }
 
 // ── Left panel: explore mode ──────────────────────────────────────────────────
@@ -1869,6 +1837,7 @@ function setMode(mode) {
     hideLeftPanelChart();
     showExploreDefault();
     document.getElementById('btn-randomize').textContent = 'Surprise Me';
+    renderFilterChips();
   } else {
     setLockedIdx(-1);
     hideHoverTip();
@@ -1876,6 +1845,13 @@ function setMode(mode) {
     document.getElementById('explore-default').style.display = 'none';
     resetToLevel0();
     restoreIntersectionHighlight();
+    const bar = document.getElementById('breadcrumb-bar');
+    bar.innerHTML = '';
+    const lbl = document.createElement('span');
+    lbl.className = 'flavor-text';
+    lbl.innerHTML = 'Controlled by story · Click <button class="inline-link" id="breadcrumb-explore-link">Explore</button> to filter';
+    bar.appendChild(lbl);
+    document.getElementById('breadcrumb-explore-link').addEventListener('click', () => setMode('explore'));
     applyStep(storyData.steps[currentStep]);
   }
 }
@@ -1892,7 +1868,15 @@ function buildShareUrl() {
     params.set('cam', [pos.x, pos.y, pos.z, target.x, target.y, target.z]
       .map(v => v.toFixed(3)).join(','));
     params.set('family', activeFamilyIdx);
-    if (highlightedLabelIdx >= 0) params.set('hl', highlightedLabelIdx);
+    if (filterLevel >= 1) {
+      params.set('fl', filterLevel);
+      params.set('l1', level1LabelIdx);
+    }
+    if (filterLevel >= 2) {
+      params.set('l2fam', level2FamilyIdx);
+      params.set('l2', level2LabelIdx);
+    }
+    if (lockedIdx >= 0) params.set('locked', lockedIdx);
   }
   return `${location.origin}${location.pathname}#${params.toString()}`;
 }
@@ -1911,20 +1895,40 @@ function applyShareState() {
     setMode('story');
   } else {
     setMode('explore');
+
     const family = params.get('family');
-    if (family !== null) {
-      const familyIdx = parseInt(family);
-      setActiveFamily(familyIdx);
-      document.querySelectorAll('.cat-tab').forEach((btn, i) => {
-        btn.classList.toggle('active', i === familyIdx);
-      });
+    const familyIdx = family !== null ? parseInt(family) : 0;
+    setActiveFamily(familyIdx);
+    document.querySelectorAll('.cat-tab').forEach((btn, i) => {
+      btn.classList.toggle('active', i === familyIdx);
+    });
+
+    const fl = params.get('fl');
+    if (fl !== null && parseInt(fl) >= 1) {
+      const l1 = parseInt(params.get('l1') ?? '-1');
+      if (l1 >= 0) transitionToLevel1(familyIdx, l1);
+
+      if (parseInt(fl) >= 2) {
+        const l2fam = parseInt(params.get('l2fam') ?? '-1');
+        const l2    = parseInt(params.get('l2')    ?? '-1');
+        if (l2fam >= 0 && l2 >= 0) transitionToLevel2(l2fam, l2);
+      }
     }
-    const hl = params.get('hl');
-    if (hl !== null) setHighlightLabel(parseInt(hl));
+
     const camStr = params.get('cam');
     if (camStr) {
       const [px, py, pz, tx, ty, tz] = camStr.split(',').map(Number);
       animateCameraToPosition([px, py, pz], [tx, ty, tz]);
+    }
+
+    const locked = params.get('locked');
+    if (locked !== null) {
+      const idx = parseInt(locked);
+      if (idx >= 0 && idx < N) {
+        setLockedIdx(idx);
+        showRecipeInfo(idx);
+        showHoverTip(idx);
+      }
     }
   }
 

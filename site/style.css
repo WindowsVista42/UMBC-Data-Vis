@@ -411,6 +411,9 @@ html, body {
 #right-column.story-mode #category-tabs {
   pointer-events: none;
 }
+#right-column.story-mode #right-panel-chart * {
+  cursor: default !important;
+}
 
 /* ── Right panel ───────────────────────────────────────────────────────── */
 #right-panel-label {
@@ -487,6 +490,17 @@ html, body {
   font-size: var(--fs-micro);
   color: var(--text-dim);
 }
+.inline-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.inline-link:hover { color: var(--text-primary); }
 
 .filter-chip {
   display: inline-flex;
@@ -760,21 +774,6 @@ html, body {
   z-index: 9999; pointer-events: none;
 }
 
-#filter-status {
-  display: none;
-  position: fixed;
-  bottom: 18px;
-  left: 50%;
-  transform: translateX(-50%);
-  align-items: center;
-  gap: 6px;
-  font-size: var(--fs-secondary);
-  color: var(--text-dim);
-  pointer-events: none;
-  z-index: 990;
-  white-space: nowrap;
-}
-#filter-status.visible { display: flex; }
 
 /* ── Chart panel ───────────────────────────────────────────────────────── */
 #chart-panel {
