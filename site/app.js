@@ -845,6 +845,23 @@ function initRightPanel() {
   });
   renderFilterChips();
   renderRightPanelChart(activeFamilyIdx);
+
+  const chartContainer = document.getElementById('right-panel-chart');
+  if (chartContainer && typeof ResizeObserver !== 'undefined') {
+    let _chartResizePending = false;
+    new ResizeObserver(() => {
+      if (_chartResizePending) return;
+      _chartResizePending = true;
+      requestAnimationFrame(() => {
+        _chartResizePending = false;
+        const famIdx = appMode === 'explore' && filterLevel >= 2 ? level2FamilyIdx : activeFamilyIdx;
+        const counts = appMode === 'explore' && filterLevel >= 2
+          ? computeFilteredCounts(level2FamilyIdx, activeFamilyIdx, level1LabelIdx)
+          : undefined;
+        renderRightPanelChart(famIdx, counts);
+      });
+    }).observe(chartContainer);
+  }
 }
 
 function updateTabVisualState() {
