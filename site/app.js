@@ -416,6 +416,7 @@ function setActiveFamily(idx) {
     alphaCache.fill(1.0);
     renderRightPanelChart(idx);
   } else if (filterLevel === 1) {
+    if (idx === activeFamilyIdx) return; // L1 family is locked
     level2FamilyIdx = idx;
     const filteredCounts = computeFilteredCounts(idx, activeFamilyIdx, level1LabelIdx);
     renderRightPanelChart(idx, filteredCounts);
@@ -829,6 +830,24 @@ function computeFilteredCounts(familyIdx, l1FamilyIdx, l1LabelIdx) {
   return counts;
 }
 
+function applyL2SecondaryPreview(famIdx, labelIdx) {
+  uniforms.uSecFamilyIdx.value = famIdx;
+  uniforms.uSecLabelIdx.value = labelIdx;
+  uniforms.uSecDimFactor.value = 0.45; // lighter than locked L2 (0.35)
+}
+
+function restoreSecondaryAfterHover() {
+  if (filterLevel === 2) {
+    // Restore locked L2 state
+    uniforms.uSecFamilyIdx.value = level2FamilyIdx;
+    uniforms.uSecLabelIdx.value = level2LabelIdx;
+    uniforms.uSecDimFactor.value = 0.35;
+  } else {
+    uniforms.uSecFamilyIdx.value = -1;
+    uniforms.uSecDimFactor.value = 1.0;
+  }
+}
+
 function renderRightPanelChart(familyIdx, scopedCounts) {
   const container = document.getElementById('right-panel-chart');
   if (!container || !meta) return;
@@ -839,10 +858,10 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
   const maxCount = Math.max(...counts, 1);
 
   const W = container.offsetWidth || 300;
-  const rowH = 22;
-  const labelW = 110;
+  const rowH = 24;
+  const labelW = Math.min(Math.floor(W * 0.42), 140);
   const barGap = 6;
-  const countPad = 36;
+  const countPad = 40;
   const barMaxW = W - labelW - barGap - countPad;
   const H = rowH * labels.length;
 
@@ -855,34 +874,52 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
   const TEXT_DIM = 'rgba(255,255,255,0.52)';
   const TEXT_BODY = 'rgba(255,255,255,0.88)';
 
+  // Clip path for label column so long names don't overflow
+  svg.append('defs').append('clipPath').attr('id', 'rpc-label-clip')
+    .append('rect').attr('x', 0).attr('y', 0).attr('width', labelW - 2).attr('height', H);
+
+  // Bar rects keyed by label index for hover manipulation
+  const barRects = new Map();
+  const barStrokes = new Map();
+
+  const isSelected = li =>
+    (filterLevel >= 1 && familyIdx === activeFamilyIdx && li === level1LabelIdx) ||
+    (filterLevel >= 2 && familyIdx === level2FamilyIdx && li === level2LabelIdx);
+
+  const baseOpacity = li => (filterLevel > 0 && !isSelected(li)) ? 0.35 : 0.88;
+
   labels.forEach((label, li) => {
     const count = counts[li];
     const barW = count > 0 ? Math.max(2, (count / maxCount) * barMaxW) : 0;
     const y = li * rowH;
     const [r, g, b] = getPaletteRgb(li);
     const barColor = `rgba(${r},${g},${b},0.75)`;
-    const isL1Selected = filterLevel >= 1 && familyIdx === activeFamilyIdx && li === level1LabelIdx;
-    const isL2Selected = filterLevel >= 2 && familyIdx === level2FamilyIdx && li === level2LabelIdx;
+    const sel = isSelected(li);
 
     const g_row = svg.append('g').attr('transform', `translate(0,${y})`);
 
-    // Label
+    // Label (clipped)
     g_row.append('text')
+      .attr('clip-path', 'url(#rpc-label-clip)')
       .attr('x', labelW - 6).attr('y', rowH / 2)
       .attr('text-anchor', 'end').attr('dominant-baseline', 'middle')
       .attr('font-size', '11px').attr('font-family', FONT)
-      .attr('fill', (isL1Selected || isL2Selected) ? TEXT_BODY : TEXT_DIM)
-      .attr('font-weight', (isL1Selected || isL2Selected) ? '600' : '400')
+      .attr('fill', sel ? TEXT_BODY : TEXT_DIM)
+      .attr('font-weight', sel ? '600' : '400')
       .text(label);
 
     // Bar
     if (barW > 0) {
-      g_row.append('rect')
+      const bar = g_row.append('rect')
+        .attr('class', 'rpc-bar')
         .attr('x', labelW + barGap).attr('y', 3)
         .attr('width', barW).attr('height', rowH - 6)
         .attr('rx', 2)
         .attr('fill', barColor)
-        .attr('opacity', (filterLevel > 0 && !isL1Selected && !isL2Selected) ? 0.4 : 0.88);
+        .attr('opacity', baseOpacity(li))
+        .attr('stroke', sel ? 'rgba(255,255,255,0.65)' : 'none')
+        .attr('stroke-width', 1.5);
+      barRects.set(li, bar);
     }
 
     // Count
@@ -901,20 +938,49 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
         .attr('x', 0).attr('y', 0)
         .attr('width', W).attr('height', rowH)
         .attr('fill', 'transparent')
-        .style('cursor', 'pointer')
+        .style('cursor', isSelected(li) ? 'default' : 'pointer')
         .on('mouseenter', () => {
           if (appMode !== 'explore') return;
-          // Light highlight: mode 1 for all, mode 0 for hovered
-          const modes = Array.from(categoryModes);
-          const nLabels = meta.categories[activeFamilyIdx].labels.length;
-          for (let j = 0; j < MAX_LABELS; j++) modes[j] = j < nLabels ? 1 : 0;
-          if (familyIdx === activeFamilyIdx) modes[li] = 0;
-          uniforms.uCategoryModes.value = modes;
+          if (isSelected(li)) return; // no hover on selected bar
+
+          // Visual: highlight hovered bar, dim others (selected keeps its stroke)
+          barRects.forEach((rect, idx) => {
+            if (idx === li) {
+              rect.attr('opacity', 1.0).attr('stroke', 'rgba(255,255,255,0.55)').attr('stroke-width', 1.5);
+            } else if (isSelected(idx)) {
+              rect.attr('opacity', 1.0); // selected stays bright
+            } else {
+              rect.attr('opacity', 0.18);
+            }
+          });
+
+          // 3D highlight
+          if (filterLevel === 0) {
+            // Light highlight: mode 1 for all, mode 0 for hovered label
+            const modes = Array.from(categoryModes);
+            const nLabels = meta.categories[activeFamilyIdx].labels.length;
+            for (let j = 0; j < MAX_LABELS; j++) modes[j] = j < nLabels ? 1 : 0;
+            modes[li] = 0;
+            uniforms.uCategoryModes.value = modes;
+          } else if (familyIdx !== activeFamilyIdx) {
+            // L2 hover preview: secondary filter dims non-matching within L1 selection
+            applyL2SecondaryPreview(familyIdx, li);
+          }
           showPhantomChip(familyIdx, li);
         })
         .on('mouseleave', () => {
           if (appMode !== 'explore') return;
+          if (isSelected(li)) return;
+
+          // Restore bar visuals
+          barRects.forEach((rect, idx) => {
+            rect.attr('opacity', baseOpacity(idx))
+                .attr('stroke', isSelected(idx) ? 'rgba(255,255,255,0.65)' : 'none');
+          });
+
+          // Restore 3D
           uniforms.uCategoryModes.value = Array.from(categoryModes);
+          restoreSecondaryAfterHover();
           clearPhantomChip();
         })
         .on('click', () => {
@@ -922,17 +988,11 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
           if (filterLevel === 0) {
             transitionToLevel1(familyIdx, li);
           } else if (filterLevel === 1) {
-            if (familyIdx === activeFamilyIdx && li === level1LabelIdx) {
-              resetToLevel0();
-            } else {
-              transitionToLevel2(familyIdx, li);
-            }
-          } else if (filterLevel === 2) {
-            if (familyIdx === level2FamilyIdx && li === level2LabelIdx) {
-              resetToLevel1();
-            } else {
-              transitionToLevel2(familyIdx, li);
-            }
+            if (isSelected(li)) resetToLevel0();
+            else transitionToLevel2(familyIdx, li);
+          } else {
+            if (isSelected(li)) resetToLevel1();
+            else transitionToLevel2(familyIdx, li);
           }
         });
     }
@@ -963,9 +1023,16 @@ function transitionToLevel2(familyIdx, labelIdx) {
   filterLevel = 2;
   level2FamilyIdx = familyIdx;
   level2LabelIdx = labelIdx;
-  const family = meta.categories[familyIdx];
-  const label = family.labels[labelIdx];
-  applyIntersectionHighlight(family.name, label);
+  // Apply secondary filter via shader uniforms (locked at 0.35 dim)
+  if (!savedIntersectionState) savedIntersectionState = { alpha: alphaCache.slice() };
+  uniforms.uSecFamilyIdx.value = familyIdx;
+  uniforms.uSecLabelIdx.value = labelIdx;
+  uniforms.uSecDimFactor.value = 0.35;
+  // Restrict raycasting to intersection
+  const secData = getCategoryFamilyData(familyIdx);
+  for (let i = 0; i < N; i++) {
+    alphaCache[i] = savedIntersectionState.alpha[i] > 0 && secData[i] === labelIdx ? 1.0 : 0.0;
+  }
   renderRightPanelChart(familyIdx, computeFilteredCounts(familyIdx, activeFamilyIdx, level1LabelIdx));
   renderFilterChips();
 }
@@ -988,7 +1055,13 @@ function resetToLevel0() {
 function resetToLevel1() {
   filterLevel = 1;
   level2LabelIdx = -1;
-  restoreIntersectionHighlight();
+  // Clear secondary uniforms, keep L1 highlight
+  uniforms.uSecFamilyIdx.value = -1;
+  uniforms.uSecDimFactor.value = 1.0;
+  if (savedIntersectionState) {
+    alphaCache.set(savedIntersectionState.alpha);
+    savedIntersectionState = null;
+  }
   const filteredCounts = computeFilteredCounts(level2FamilyIdx, activeFamilyIdx, level1LabelIdx);
   renderRightPanelChart(level2FamilyIdx, filteredCounts);
   renderFilterChips();
