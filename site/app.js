@@ -803,7 +803,13 @@ function initRightPanel() {
   meta.categories.forEach((cat, i) => {
     const btn = document.createElement('button');
     btn.className = 'cat-tab' + (i === 0 ? ' active' : '');
-    btn.textContent = cat.name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = cat.name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const sym = document.createElement('span');
+    sym.className = 'tab-symbol';
+    sym.textContent = '○';
+    btn.appendChild(nameSpan);
+    btn.appendChild(sym);
     btn.addEventListener('click', () => {
       document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
@@ -818,9 +824,11 @@ function initRightPanel() {
 function updateTabVisualState() {
   document.querySelectorAll('.cat-tab').forEach((btn, i) => {
     btn.classList.remove('tab-locked', 'tab-available');
-    if (filterLevel >= 1 && i !== activeFamilyIdx) {
-      btn.classList.add('tab-available');
-    }
+    const sym = btn.querySelector('.tab-symbol');
+    if (!sym) return;
+    const isActive = (i === activeFamilyIdx && filterLevel >= 1) ||
+                     (i === level2FamilyIdx && filterLevel >= 2);
+    sym.textContent = isActive ? '●' : '○';
   });
 }
 
@@ -885,16 +893,16 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
     .style('display', 'block').style('overflow', 'visible');
 
   const FONT = '"Source Serif 4", serif';
-  const TEXT_DIM = 'rgba(255,255,255,0.52)';
+  const TEXT_DIM = 'rgba(255,255,255,0.72)';
   const TEXT_BODY = 'rgba(255,255,255,0.88)';
 
   // Clip path for label column so long names don't overflow
   svg.append('defs').append('clipPath').attr('id', 'rpc-label-clip')
     .append('rect').attr('x', 0).attr('y', 0).attr('width', labelW - 2).attr('height', H);
 
-  // Bar rects keyed by label index for hover manipulation
+  // Bar rects and label texts keyed by label index for hover manipulation
   const barRects = new Map();
-  const barStrokes = new Map();
+  const labelTexts = new Map();
 
   const isL1Chart = familyIdx === activeFamilyIdx;
   const isSelected = li =>
@@ -923,6 +931,7 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
       .attr('fill', sel ? TEXT_BODY : TEXT_DIM)
       .attr('font-weight', sel ? '600' : '400')
       .text(shortenLabel(label));
+    labelTexts.set(li, g_row.select('text'));
 
     // Bar
     if (barW > 0) {
@@ -962,11 +971,14 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
           // L1 selected and viewing L1 chart → bars are locked, no hover
           if (filterLevel === 1 && isL1Chart) return;
 
-          // Bar visuals
+          // Bar + label visuals
           barRects.forEach((rect, idx) => {
             if (idx === li) rect.attr('opacity', 1.0).attr('stroke', 'none');
             else if (isSelected(idx)) rect.attr('opacity', 1.0);
             else rect.attr('opacity', 0.55);
+          });
+          labelTexts.forEach((text, idx) => {
+            text.attr('fill', idx === li ? TEXT_BODY : TEXT_DIM);
           });
 
           // 3D highlight
@@ -994,6 +1006,9 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
           barRects.forEach((rect, idx) => {
             rect.attr('opacity', baseOpacity(idx))
                 .attr('stroke', isSelected(idx) ? 'rgba(255,255,255,0.65)' : 'none');
+          });
+          labelTexts.forEach((text, idx) => {
+            text.attr('fill', (isSelected(idx) || !hasSelection) ? TEXT_BODY : TEXT_DIM);
           });
 
           // Clear secondary uniforms — locked L2 state is restored by transitionToLevel2 on click
@@ -1025,6 +1040,12 @@ function transitionToLevel1(familyIdx, labelIdx) {
   level2FamilyIdx = -1; // no L2 family selected yet
   setHighlightLabel(labelIdx);
   updateTabVisualState();
+  // Pulse non-L1 tabs to hint at L2 interaction
+  document.querySelectorAll('.cat-tab').forEach((btn, i) => {
+    if (i === familyIdx) return;
+    btn.classList.add('tab-pulse');
+    btn.addEventListener('animationend', () => btn.classList.remove('tab-pulse'), { once: true });
+  });
   // Stay on the L1 family chart — user can switch tabs manually for L2
   renderRightPanelChart(familyIdx);
   renderFilterChips();
@@ -1045,6 +1066,7 @@ function transitionToLevel2(familyIdx, labelIdx) {
   for (let i = 0; i < N; i++) {
     alphaCache[i] = savedIntersectionState.alpha[i] > 0 && secData[i] === labelIdx ? 1.0 : 0.0;
   }
+  updateTabVisualState();
   renderRightPanelChart(familyIdx, computeFilteredCounts(familyIdx, activeFamilyIdx, level1LabelIdx));
   renderFilterChips();
 }
@@ -1074,6 +1096,7 @@ function resetToLevel1() {
     alphaCache.set(savedIntersectionState.alpha);
     savedIntersectionState = null;
   }
+  updateTabVisualState();
   // Render L2 family chart if one was chosen, otherwise fall back to L1 family chart
   if (level2FamilyIdx >= 0 && level2FamilyIdx !== activeFamilyIdx) {
     const filteredCounts = computeFilteredCounts(level2FamilyIdx, activeFamilyIdx, level1LabelIdx);
@@ -1114,23 +1137,21 @@ function renderFilterStatus(phantomFamilyIdx = -1, phantomLabelIdx = -1) {
   if (!hasL1 && !hasPhantom) { el.classList.remove('visible'); return; }
   el.classList.add('visible');
 
-  const prefix = document.createElement('span');
-  prefix.textContent = 'Showing recipes with';
-  el.appendChild(prefix);
+  const txt = s => { const sp = document.createElement('span'); sp.textContent = s; return sp; };
+  el.appendChild(txt('Showing recipes with'));
 
   if (hasL1) {
     el.appendChild(makeChip(activeFamilyIdx, level1LabelIdx, false, null));
   } else {
-    // L0 phantom — L1 preview
     el.appendChild(makeChip(phantomFamilyIdx, phantomLabelIdx, true, null));
     return;
   }
 
   if (hasL2) {
-    const and = document.createElement('span'); and.textContent = 'and'; el.appendChild(and);
+    el.appendChild(txt('and'));
     el.appendChild(makeChip(level2FamilyIdx, level2LabelIdx, false, null));
   } else if (hasPhantom) {
-    const and = document.createElement('span'); and.textContent = 'and'; el.appendChild(and);
+    el.appendChild(txt('and'));
     el.appendChild(makeChip(phantomFamilyIdx, phantomLabelIdx, true, null));
   }
 }
@@ -1141,18 +1162,20 @@ function renderFilterChips() {
   if (filterLevel === 0) {
     const txt = document.createElement('span');
     txt.className = 'flavor-text';
-    txt.textContent = 'Hover to preview · Click to filter';
+    txt.textContent = 'Hover to preview · Click to filter · Up to two categories';
     bar.appendChild(txt);
     renderFilterStatus();
     return;
   }
-  bar.appendChild(makeChip(activeFamilyIdx, level1LabelIdx, false, resetToLevel0));
-  if (filterLevel === 2) {
-    const sep = document.createElement('span');
-    sep.className = 'flavor-text';
-    sep.style.margin = '0 2px';
-    sep.textContent = 'and';
-    bar.appendChild(sep);
+  const txt = s => { const sp = document.createElement('span'); sp.className = 'flavor-text'; sp.textContent = s; return sp; };
+  if (filterLevel === 1) {
+    bar.appendChild(txt('Showing'));
+    bar.appendChild(makeChip(activeFamilyIdx, level1LabelIdx, false, resetToLevel0));
+    bar.appendChild(txt('with something else?'));
+  } else {
+    bar.appendChild(txt('Showing'));
+    bar.appendChild(makeChip(activeFamilyIdx, level1LabelIdx, false, resetToLevel0));
+    bar.appendChild(txt('with'));
     bar.appendChild(makeChip(level2FamilyIdx, level2LabelIdx, false, resetToLevel1));
   }
   renderFilterStatus();
@@ -1160,16 +1183,25 @@ function renderFilterChips() {
 
 function showPhantomChip(familyIdx, labelIdx) {
   const bar = document.getElementById('breadcrumb-bar');
-  bar.querySelectorAll('.filter-chip-phantom, .phantom-sep').forEach(e => e.remove());
-  if (filterLevel === 0) bar.innerHTML = '';
-  if (filterLevel >= 1) {
-    const sep = document.createElement('span');
-    sep.className = 'flavor-text phantom-sep';
-    sep.style.margin = '0 2px';
-    sep.textContent = 'and';
-    bar.appendChild(sep);
+  const txt = s => { const sp = document.createElement('span'); sp.className = 'flavor-text phantom-sep'; sp.textContent = s; return sp; };
+
+  if (filterLevel === 0) {
+    bar.innerHTML = '';
+    bar.appendChild(txt('Showing'));
+    bar.appendChild(makeChip(familyIdx, labelIdx, true, null));
+  } else if (filterLevel === 1) {
+    // Rebuild as: Showing [pill1] and [phantom pill2]
+    bar.innerHTML = '';
+    bar.appendChild(txt('Showing'));
+    bar.appendChild(makeChip(activeFamilyIdx, level1LabelIdx, false, resetToLevel0));
+    bar.appendChild(txt('with'));
+    bar.appendChild(makeChip(familyIdx, labelIdx, true, null));
+  } else {
+    // L2 locked — append phantom after existing chips
+    bar.querySelectorAll('.filter-chip-phantom, .phantom-sep').forEach(e => e.remove());
+    bar.appendChild(txt('with'));
+    bar.appendChild(makeChip(familyIdx, labelIdx, true, null));
   }
-  bar.appendChild(makeChip(familyIdx, labelIdx, true, null));
   renderFilterStatus(familyIdx, labelIdx);
 }
 
@@ -1179,7 +1211,7 @@ function clearPhantomChip() {
   if (filterLevel === 0 && !bar.querySelector('.filter-chip')) {
     const txt = document.createElement('span');
     txt.className = 'flavor-text';
-    txt.textContent = 'Hover to preview · Click to filter';
+    txt.textContent = 'Hover to preview · Click to filter · Up to two categories';
     bar.appendChild(txt);
   }
   renderFilterStatus();

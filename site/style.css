@@ -184,7 +184,7 @@ html, body {
   top: calc(var(--topbar-h) + var(--panel-gap));
   left: var(--panel-gap);
   width: var(--panel-w);
-  height: var(--left-panel-h);
+  height: 300px;
   flex-direction: column;
   padding: 18px 16px 12px;
   pointer-events: none;
@@ -464,8 +464,15 @@ html, body {
 .cat-tab:hover         { background: rgba(255,255,255,0.09); color: var(--text-body); }
 .cat-tab.active        { background: rgba(15,15,28,0.20); border-color: rgba(255,255,255,0.12);
                          color: var(--text-primary); border-bottom-color: rgba(15,15,28,0.20); }
-.cat-tab.tab-locked    { opacity: 0.45; cursor: default; color: var(--text-muted); }
-.cat-tab.tab-available { border-color: rgba(255,255,255,0.22); color: var(--text-body); }
+.cat-tab .tab-symbol { font-size: 11px; margin-left: 5px; opacity: 0.85; line-height: 1; }
+
+@keyframes tab-symbol-pulse {
+  0%, 100% { opacity: 0.85; transform: scale(1); }
+  50%       { opacity: 1.0;  transform: scale(1.5); }
+}
+.cat-tab.tab-pulse .tab-symbol {
+  animation: tab-symbol-pulse 0.7s ease-in-out 2;
+}
 
 /* Breadcrumb / filter chip bar */
 #breadcrumb-bar {
@@ -482,7 +489,6 @@ html, body {
 #breadcrumb-bar .flavor-text {
   font-size: var(--fs-micro);
   color: var(--text-dim);
-  font-style: italic;
 }
 
 .filter-chip {
