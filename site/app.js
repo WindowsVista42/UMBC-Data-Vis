@@ -1063,10 +1063,11 @@ function renderChart(container, config, data) {
   const g = svg.append('g')
     .attr('transform', `translate(${margin.left},${margin.top})`);
 
+  const FONT = '"Source Serif 4", serif';
   const styleAxis = ax => ax
     .call(a => a.select('.domain').attr('stroke', AXIS_COLOR))
     .call(a => a.selectAll('.tick line').attr('stroke', AXIS_COLOR))
-    .call(a => a.selectAll('text').attr('fill', TEXT_COLOR).attr('font-size', '11px'));
+    .call(a => a.selectAll('text').attr('fill', TEXT_COLOR).attr('font-size', '11px').attr('font-family', FONT));
 
   if (type === 'histogram') {
     if (isBinned) {
@@ -1109,6 +1110,7 @@ function renderChart(container, config, data) {
       g.selectAll('.bar-count').data(counts).join('text')
         .attr('class', 'bar-count')
         .attr('pointer-events', 'none')
+        .attr('font-family', FONT)
         .attr('font-size', '9px')
         .attr('text-anchor', 'middle')
         .attr('dominant-baseline', 'hanging')
@@ -1204,6 +1206,7 @@ function renderChart(container, config, data) {
         .attr('y', margin.top - 7)
         .attr('fill', TEXT_COLOR)
         .attr('font-size', '11px')
+        .attr('font-family', FONT)
         .attr('text-anchor', 'start')
         .text('↑ ' + config.yLabel);
     }
@@ -1257,6 +1260,7 @@ function renderChart(container, config, data) {
         .attr('y', margin.top - 7)
         .attr('fill', TEXT_COLOR)
         .attr('font-size', '11px')
+        .attr('font-family', FONT)
         .attr('text-anchor', 'start')
         .text('↑ ' + config.yLabel);
     }
@@ -1284,6 +1288,7 @@ function renderChart(container, config, data) {
         .attr('y', margin.top - 7)
         .attr('fill', TEXT_COLOR)
         .attr('font-size', '11px')
+        .attr('font-family', FONT)
         .attr('text-anchor', 'start')
         .text('↑ ' + config.yLabel);
     }
@@ -1292,7 +1297,7 @@ function renderChart(container, config, data) {
   if (config.xLabel) {
     svg.append('text')
       .attr('x', margin.left + innerW / 2).attr('y', H - 2)
-      .attr('text-anchor', 'middle').attr('fill', TEXT_COLOR).attr('font-size', '11px')
+      .attr('text-anchor', 'middle').attr('fill', TEXT_COLOR).attr('font-size', '11px').attr('font-family', FONT)
       .text(config.xLabel);
   }
 }
