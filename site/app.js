@@ -575,6 +575,7 @@ function populateHoverTip(idx, recipe) {
   if (recipe.minutes) parts.push(`${recipe.minutes} min`);
   if (recipe.n_steps) parts.push(`${recipe.n_steps} steps`);
   if (recipe.n_ingredients) parts.push(`${recipe.n_ingredients} ingredients`);
+  if (recipe.submitted) parts.push(recipe.submitted.slice(0, 7));
   metaEl.textContent = parts.join(' · ');
 
   descEl.textContent = (recipe.description || '').trim().slice(0, 220);
