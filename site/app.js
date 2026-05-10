@@ -902,7 +902,7 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
     : Array.from({length: labels.length}, (_, i) => i);
 
   const W = container.offsetWidth || 300;
-  const MIN_ROW_H = 20;
+  const MIN_ROW_H = 18;
   const TOP_H = 18;
   const containerH = Math.max(0, (container.clientHeight || 0) - 12 - TOP_H);
   const rowH = containerH > 0
@@ -921,7 +921,7 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
 
   container.innerHTML = '';
   const svg = d3.select(container).append('svg')
-    .attr('width', W).attr('height', TOP_H + H)
+    .attr('width', W).attr('height', TOP_H + H - 1)
     .style('display', 'block').style('overflow', 'visible');
 
   const FONT = '"Source Serif 4", serif';
@@ -1436,32 +1436,8 @@ async function showRecipeChartInPanel(recipeId, tabId, title) {
   });
 }
 
-// ── Chart panel (story mode only) ─────────────────────────────────────────────
-function showChartPanel(config, data) {
-  if (appMode === 'explore') return;
-  document.getElementById('chart-panel-title').textContent = config.title || '';
-  const body = document.getElementById('chart-panel-body');
-  body.innerHTML = '';
-  document.getElementById('chart-panel').classList.add('open');
-  requestAnimationFrame(() => renderChart(body, config, data));
-}
-
-function hideChartPanel() {
-  if (appMode === 'explore') return;
-  restoreIntersectionHighlight();
-  document.getElementById('chart-panel').classList.remove('open');
-  document.getElementById('chart-panel-body').innerHTML = '';
-}
-
 async function loadAndRenderChart(config, container) {
-  const panelMode = container === null;
-  let target = container;
-  if (panelMode) {
-    document.getElementById('chart-panel-title').textContent = config.title || '';
-    document.getElementById('chart-panel').classList.add('open');
-    target = document.getElementById('chart-panel-body');
-    target.innerHTML = '';
-  }
+  if (container === null) return; // panel charts removed
   try {
     const resp = await fetch(config.dataFile);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -1482,7 +1458,6 @@ async function loadAndRenderChart(config, container) {
     }
     renderChart(target, merged, fileData.data);
   } catch (e) {
-    if (panelMode) hideChartPanel();
     console.warn('Chart load failed:', e);
   }
 }
@@ -1809,8 +1784,6 @@ function applyStep(step) {
   // Render content blocks
   const contentEl = document.getElementById('story-content');
   contentEl.innerHTML = '';
-  let panelChartBlock = null;
-
   for (const block of step.content ?? []) {
     if (block.type === 'text') {
       const el = document.createElement('p');
@@ -1822,22 +1795,12 @@ function applyStep(step) {
       el.className = 'story-description';
       el.textContent = block.value || '';
       contentEl.appendChild(el);
-    } else if (block.type === 'chart') {
-      if (block.placement === 'inline') {
-        const wrap = document.createElement('div');
-        wrap.className = 'story-chart-inline';
-        contentEl.appendChild(wrap);
-        loadAndRenderChart(block, wrap);
-      } else {
-        panelChartBlock = block;
-      }
+    } else if (block.type === 'chart' && block.placement === 'inline') {
+      const wrap = document.createElement('div');
+      wrap.className = 'story-chart-inline';
+      contentEl.appendChild(wrap);
+      loadAndRenderChart(block, wrap);
     }
-  }
-
-  if (panelChartBlock) {
-    loadAndRenderChart(panelChartBlock, null);
-  } else {
-    hideChartPanel();
   }
 
   document.getElementById('story-counter').textContent =

@@ -65,8 +65,7 @@
       "categorySubtitle": "Many recipes earn a perfect score",
       "content": [
         { "type": "text", "style": "heading", "value": "The 5-Star Split" },
-        { "type": "text", "style": "body", "value": "Coloring by average rating reveals a striking pattern. A large cluster of recipes sits at a perfect 5 stars, clearly separated from recipes with lower ratings." },
-        { "type": "chart", "chartType": "histogram", "dataFile": "data/charts/avg_rating.json", "categoryFamily": "avg_rating", "yLabel": "Recipes", "placement": "panel", "title": "Rating Distribution" }
+        { "type": "text", "style": "body", "value": "Coloring by average rating reveals a striking pattern. A large cluster of recipes sits at a perfect 5 stars, clearly separated from recipes with lower ratings." }
       ]
     },
     {
