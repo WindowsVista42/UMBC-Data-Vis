@@ -928,11 +928,18 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
   const labelTexts = new Map();
 
   const isL1Chart = familyIdx === activeFamilyIdx;
-  const isSelected = li =>
-    (isL1Chart && filterLevel >= 1 && li === level1LabelIdx) ||
-    (!isL1Chart && filterLevel >= 2 && familyIdx === level2FamilyIdx && li === level2LabelIdx);
+  const isSelected = li => {
+    if (appMode === 'story') {
+      if (highlightLabelSet) return highlightLabelSet.has(li);
+      return highlightedLabelIdx >= 0 && li === highlightedLabelIdx;
+    }
+    return (isL1Chart && filterLevel >= 1 && li === level1LabelIdx) ||
+           (!isL1Chart && filterLevel >= 2 && familyIdx === level2FamilyIdx && li === level2LabelIdx);
+  };
 
-  const hasSelection = (isL1Chart && filterLevel >= 1) || (!isL1Chart && filterLevel >= 2);
+  const hasSelection = appMode === 'story'
+    ? (highlightedLabelIdx >= 0 || (highlightLabelSet?.size ?? 0) > 0)
+    : ((isL1Chart && filterLevel >= 1) || (!isL1Chart && filterLevel >= 2));
   const baseOpacity = li => isSelected(li) ? 1.0 : (hasSelection ? 0.28 : 0.88);
 
   labels.forEach((label, li) => {
@@ -1804,6 +1811,8 @@ function applyStep(step) {
 
   document.getElementById('btn-prev').disabled = currentStep === 0;
   document.getElementById('btn-next').disabled = currentStep === storyData.steps.length - 1;
+
+  renderRightPanelChart(activeFamilyIdx);
 }
 
 function initStoryPanel() {
@@ -2103,8 +2112,10 @@ async function boot() {
     btnShare.classList.remove('active');
   });
   document.addEventListener('click', e => {
-    if (!sharePopup.contains(e.target) && e.target !== document.getElementById('btn-share'))
+    if (!sharePopup.contains(e.target) && e.target !== document.getElementById('btn-share')) {
       sharePopup.classList.remove('open');
+      btnShare.classList.remove('active');
+    }
   });
 
 

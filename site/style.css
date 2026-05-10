@@ -1,7 +1,7 @@
 /* ── Design tokens ─────────────────────────────────────────────────────── */
 :root {
   /* Layout */
-  --topbar-h:      36px;
+  --topbar-h:      32px;
   --panel-gap:     12px;
   --panel-w:       clamp(360px, 20vw, 420px);
   --left-panel-w:  clamp(340px, 20vw, 360px);
@@ -73,9 +73,8 @@ html, body {
 
 .mode-btn {
   font-size: var(--fs-secondary);
-  width: 110px;
   justify-content: center;
-  padding: 0;
+  padding: 0 20px;
   display: flex;
   align-items: center;
   background: rgba(255, 255, 255, 0.06);
@@ -90,6 +89,7 @@ html, body {
 .mode-btn:hover  { background: rgba(255,255,255,0.11); color: var(--text-body); }
 .mode-btn.active { background: rgba(78,121,167,0.30); border-color: rgba(78,121,167,0.55);
                    color: var(--text-primary); }
+
 
 .topbar-btn {
   font-size: var(--fs-micro);
