@@ -138,6 +138,8 @@ function setLockedIdx(idx) {
 let hoverIdx = -1;   // currently hovered point index
 let pointerIsDown = false;
 let mouseDownX = 0, mouseDownY = 0;
+let lastMouseX = -1, lastMouseY = -1;
+let hoveredChartFamilyIdx = -1, hoveredChartLi = -1;
 let lastClickTime = 0;
 let camAnim = null;
 
@@ -563,15 +565,19 @@ function populateHoverTip(idx, recipe) {
     tagsEl.appendChild(span);
   });
 
-  // Meta line: date + cook time + steps
+  // Meta line
   const parts = [];
-  if (recipe.submitted) parts.push(recipe.submitted.slice(0, 7)); // YYYY-MM
+  if (recipe.avg_rating != null) {
+    const ratingStr = `★ ${recipe.avg_rating.toFixed(1)}`;
+    const countStr = recipe.n_ratings != null ? ` (${recipe.n_ratings} ratings)` : '';
+    parts.push(ratingStr + countStr);
+  }
   if (recipe.minutes) parts.push(`${recipe.minutes} min`);
   if (recipe.n_steps) parts.push(`${recipe.n_steps} steps`);
-  if (recipe.avg_rating != null) parts.push(`★ ${recipe.avg_rating.toFixed(1)}`);
+  if (recipe.n_ingredients) parts.push(`${recipe.n_ingredients} ingredients`);
   metaEl.textContent = parts.join(' · ');
 
-  descEl.textContent = (recipe.description || '').trim().slice(0, 200);
+  descEl.textContent = (recipe.description || '').trim().slice(0, 220);
 }
 
 function showHoverTip(idx) {
@@ -629,6 +635,7 @@ function onPointerDown(e) {
 }
 
 function onPointerMove(e) {
+  lastMouseX = e.clientX; lastMouseY = e.clientY;
   if (pointerIsDown) {
     const d = Math.hypot(e.clientX - mouseDownX, e.clientY - mouseDownY);
     if (d > DRAG_THRESH) { if (lockedIdx < 0) hideHoverTip(); return; }
@@ -1003,13 +1010,16 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
         .attr('x', 0).attr('y', 0)
         .attr('width', W).attr('height', rowH)
         .attr('fill', 'transparent')
-        .style('cursor', isSelected(li) ? 'default' : 'pointer')
+        .style('cursor', (isSelected(li) || !hasSelection) ? 'pointer' : 'default')
         .on('mouseenter', () => {
           if (appMode !== 'explore') return;
           // L2 locked → no hover anywhere
           if (filterLevel >= 2) return;
           // L1 selected and viewing L1 chart → bars are locked, no hover
           if (filterLevel === 1 && isL1Chart) return;
+
+          hoveredChartFamilyIdx = familyIdx;
+          hoveredChartLi = li;
 
           // Bar + label visuals
           barRects.forEach((rect, idx) => {
@@ -1052,6 +1062,8 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
           });
 
           // Clear secondary uniforms — locked L2 state is restored by transitionToLevel2 on click
+          hoveredChartFamilyIdx = -1;
+          hoveredChartLi = -1;
           uniforms.uSecFamilyIdx.value     = -1;
           uniforms.uSecDimFactor.value     = 1.0;
           uniforms.uSecOutlineFactor.value = 0.0;
@@ -1060,13 +1072,29 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
         .on('click', () => {
           if (appMode !== 'explore') return;
           if (isL1Chart) {
-            // When L1 is selected, any click on L1 chart resets (acts as deselect)
-            if (filterLevel >= 1) resetToLevel0();
-            else transitionToLevel1(familyIdx, li);
+            if (filterLevel >= 1) {
+              // Deselecting — reset first, then immediately re-apply hover dim so
+              // the next render never sees a fully-bright frame
+              resetToLevel0();
+              if (hoveredChartFamilyIdx >= 0 && hoveredChartLi >= 0) {
+                uniforms.uSecFamilyIdx.value     = hoveredChartFamilyIdx;
+                uniforms.uSecLabelIdx.value      = hoveredChartLi;
+                uniforms.uSecDimFactor.value     = 0.45;
+                uniforms.uSecOutlineFactor.value = 0.0;
+              }
+            } else {
+              // Selecting — clear hover preview before locking in
+              uniforms.uSecFamilyIdx.value     = -1;
+              uniforms.uSecDimFactor.value     = 1.0;
+              uniforms.uSecOutlineFactor.value = 0.0;
+              transitionToLevel1(familyIdx, li);
+            }
           } else {
-            // On L2 family chart: click selects if nothing selected, click again (any bar) deselects
+            uniforms.uSecFamilyIdx.value     = -1;
+            uniforms.uSecDimFactor.value     = 1.0;
+            uniforms.uSecOutlineFactor.value = 0.0;
             if (filterLevel <= 1) transitionToLevel2(familyIdx, li);
-            else resetToLevel1(); // L2 is locked — any click deselects
+            else resetToLevel1();
           }
         });
     }
@@ -1092,6 +1120,16 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
     .attr('font-size', '10px').attr('font-family', FONT)
     .attr('fill', 'rgba(255,255,255,0.40)')
     .text('Recipe Count →');
+
+  // Re-apply hover at the start of the next frame so it lands after the fresh render paints
+  if (hoveredChartFamilyIdx === familyIdx && hoveredChartLi >= 0) {
+    const capturedRect = barRects.get(hoveredChartLi);
+    requestAnimationFrame(() => {
+      if (capturedRect && container.contains(capturedRect.node())) {
+        capturedRect.node().dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
+      }
+    });
+  }
 }
 
 // ── Filter state machine ──────────────────────────────────────────────────────
@@ -1138,6 +1176,9 @@ function resetToLevel0() {
   level2FamilyIdx = -1;
   level2LabelIdx = -1;
   restoreIntersectionHighlight();
+  uniforms.uSecFamilyIdx.value     = -1;
+  uniforms.uSecDimFactor.value     = 1.0;
+  uniforms.uSecOutlineFactor.value = 0.0;
   setHighlightLabel(-1);
   updateTabVisualState();
   document.querySelectorAll('.cat-tab').forEach((btn, i) => {

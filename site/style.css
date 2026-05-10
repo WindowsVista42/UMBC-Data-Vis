@@ -413,6 +413,9 @@ html, body {
 #right-column.story-mode #right-panel-chart {
   border-top: 1px solid rgba(255,255,255,0.08);
 }
+#right-column.story-mode #right-panel-chart * {
+  cursor: default !important;
+}
 
 /* ── Right panel ───────────────────────────────────────────────────────── */
 #right-panel-title {
@@ -730,8 +733,8 @@ html, body {
 .ht-tag {
   font-size: var(--fs-micro);
   font-weight: 500;
-  padding: 2px 7px;
-  border-radius: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
   border: 1px solid transparent;
   color: rgba(255,255,255,0.95);
   letter-spacing: 0.01em;
