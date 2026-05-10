@@ -9,6 +9,9 @@
   --chart-panel-w: clamp(420px, 30vw, 600px);
   --chart-panel-h: clamp(240px, 30vh, 360px);
 
+  /* Panel background */
+  --panel-bg: rgba(15, 15, 28, 0.35);
+
   /* Type scale */
   --fs-hero:      28px;
   --fs-title:     20px;
@@ -107,7 +110,7 @@ html, body {
   top: calc(var(--topbar-h) + var(--panel-gap)); left: var(--panel-gap);
   width: var(--panel-w);
   height: var(--left-panel-h);
-  background: rgba(15, 15, 28, 0.88);
+  background: var(--panel-bg);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
   backdrop-filter: blur(8px);
@@ -173,17 +176,23 @@ html, body {
 .nav-btn:hover    { background: rgba(255,255,255,0.12); color: var(--text-primary); }
 .nav-btn:disabled { opacity: 0.3; cursor: default; }
 
-/* Explore default — floats over canvas, no panel chrome */
+/* Explore default — floats over canvas with panel chrome */
 #explore-default {
   display: none;
   position: fixed;
   top: calc(var(--topbar-h) + var(--panel-gap));
   left: var(--panel-gap);
   width: var(--panel-w);
+  height: var(--left-panel-h);
   flex-direction: column;
   padding: 18px 16px 12px;
   pointer-events: none;
   z-index: 900;
+  background: var(--panel-bg);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.40);
 }
 #explore-default .explore-hints { pointer-events: none; }
 
@@ -294,7 +303,7 @@ html, body {
   transform: translateY(-50%);
   font-size: var(--fs-label);
   padding: 8px 10px;
-  background: rgba(15, 15, 28, 0.88);
+  background: var(--panel-bg);
   border: 1px solid rgba(255,255,255,0.14);
   border-radius: 8px;
   color: var(--text-secondary);
@@ -404,9 +413,6 @@ html, body {
 #right-column.story-mode .cat-row {
   pointer-events: none;
 }
-#right-column.story-mode #right-panel {
-  background: rgba(15, 15, 28, 0.20);
-}
 
 /* ── Right panel ───────────────────────────────────────────────────────── */
 #right-panel-label {
@@ -422,7 +428,7 @@ html, body {
   flex: 1;
   min-height: var(--right-panel-h);
   max-height: var(--right-panel-h);
-  background: rgba(15, 15, 28, 0.88);
+  background: var(--panel-bg);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
   backdrop-filter: blur(8px);
@@ -455,8 +461,8 @@ html, body {
   white-space: nowrap;
 }
 .cat-tab:hover         { background: rgba(255,255,255,0.09); color: var(--text-body); }
-.cat-tab.active        { background: rgba(15,15,28,0.88); border-color: rgba(255,255,255,0.12);
-                         color: var(--text-primary); border-bottom-color: rgba(15,15,28,0.88); }
+.cat-tab.active        { background: rgba(15,15,28,0.20); border-color: rgba(255,255,255,0.12);
+                         color: var(--text-primary); border-bottom-color: rgba(15,15,28,0.20); }
 .cat-tab.tab-locked    { opacity: 0.45; cursor: default; color: var(--text-muted); }
 .cat-tab.tab-available { border-color: rgba(255,255,255,0.22); color: var(--text-body); }
 
@@ -660,11 +666,11 @@ html, body {
   position: absolute;
   top: 12px; width: 0; height: 0;
 }
-#hover-tip-arrow.arrow-left  { left: -7px; border-top: 7px solid transparent; border-bottom: 7px solid transparent; border-right: 7px solid rgba(15,15,28,0.88); }
-#hover-tip-arrow.arrow-right { right: -7px; border-top: 7px solid transparent; border-bottom: 7px solid transparent; border-left: 7px solid rgba(15,15,28,0.88); }
+#hover-tip-arrow.arrow-left  { left: -7px; border-top: 7px solid transparent; border-bottom: 7px solid transparent; border-right: 7px solid rgba(15,15,28,0.20); }
+#hover-tip-arrow.arrow-right { right: -7px; border-top: 7px solid transparent; border-bottom: 7px solid transparent; border-left: 7px solid rgba(15,15,28,0.20); }
 
 #hover-tip-inner {
-  background: rgba(15,15,28,0.88);
+  background: var(--panel-bg);
   border: 1px solid rgba(255,255,255,0.15);
   border-radius: 8px;
   padding: 10px 12px;
@@ -768,7 +774,7 @@ html, body {
   bottom: var(--panel-gap); left: var(--panel-gap);
   width: var(--chart-panel-w);
   height: var(--chart-panel-h);
-  background: rgba(15, 15, 28, 0.88);
+  background: var(--panel-bg);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
   backdrop-filter: blur(8px);
