@@ -272,6 +272,30 @@ async function getRecipeData(idx) {
   return chunk?.[String(recipeIds[idx])] ?? null;
 }
 
+// ── Star field ────────────────────────────────────────────────────────────────
+function createStarField() {
+  const COUNT = 3000;
+  const RADIUS = 120;
+  const pos = new Float32Array(COUNT * 3);
+  for (let i = 0; i < COUNT; i++) {
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    pos[i * 3]     = RADIUS * Math.sin(phi) * Math.cos(theta);
+    pos[i * 3 + 1] = RADIUS * Math.sin(phi) * Math.sin(theta);
+    pos[i * 3 + 2] = RADIUS * Math.cos(phi);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const mat = new THREE.PointsMaterial({
+    color: 0xffffff,
+    size: 0.12,
+    sizeAttenuation: true,
+    transparent: true,
+    opacity: 0.35,
+  });
+  return new THREE.Points(geo, mat);
+}
+
 // ── Scene ─────────────────────────────────────────────────────────────────────
 function initScene(palette) {
   const canvas = document.getElementById('three-canvas');
@@ -283,6 +307,7 @@ function initScene(palette) {
   renderer.setSize(w, h);
 
   scene = new THREE.Scene();
+  scene.add(createStarField());
   camera = new THREE.PerspectiveCamera(60, w / h, 0.001, 1000);
   camera.position.copy(defaultCamPos);
 
@@ -293,6 +318,10 @@ function initScene(palette) {
   controls.maxDistance = dataExtent * 6;
   controls.target.copy(dataCenterVec);
   controls.update();
+  controls.addEventListener('start', () => stopIdleAutoRotate());
+  controls.addEventListener('end', () => {
+    if (appMode === 'story' && currentStep === 0) startIdleAutoRotate();
+  });
 
   geometry = new THREE.BufferGeometry();
   geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1000);
@@ -766,6 +795,30 @@ function animateCameraTo(toQ, toDist, toTarget) {
   };
 }
 
+// ── Idle auto-rotate (step 0 only) ───────────────────────────────────────────
+let _autoRotateTimer = null;
+
+let _autoRotateFadeStart = -1;
+const AUTO_ROTATE_TARGET = 0.25;
+const AUTO_ROTATE_FADE_MS = 3000;
+
+function startIdleAutoRotate() {
+  clearTimeout(_autoRotateTimer);
+  _autoRotateTimer = setTimeout(() => {
+    if (appMode === 'story' && currentStep === 0) {
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 0;
+      _autoRotateFadeStart = performance.now();
+    }
+  }, 3000);
+}
+
+function stopIdleAutoRotate() {
+  clearTimeout(_autoRotateTimer);
+  _autoRotateFadeStart = -1;
+  if (controls) { controls.autoRotate = false; controls.autoRotateSpeed = 0; }
+}
+
 /** Animate from a story-step camera object {position, target}. */
 function animateCameraToPosition(pos, target) {
   const posVec = new THREE.Vector3(...pos);
@@ -816,6 +869,11 @@ function animate() {
   if (camAnim) {
     if (!camAnim(performance.now())) camAnim = null;
   } else {
+    if (_autoRotateFadeStart >= 0) {
+      const t = Math.min((performance.now() - _autoRotateFadeStart) / AUTO_ROTATE_FADE_MS, 1);
+      controls.autoRotateSpeed = t * t * AUTO_ROTATE_TARGET;
+      if (t >= 1) _autoRotateFadeStart = -1;
+    }
     controls.update(); // only when not animating — update() fights quaternion slerp
   }
   renderer.render(scene, camera);
@@ -1880,7 +1938,14 @@ function applyStep(step) {
   document.getElementById('btn-prev').disabled = currentStep === 0;
   document.getElementById('btn-next').disabled = currentStep === storyData.steps.length - 1;
 
+  const pct = ((currentStep + 1) / storyData.steps.length) * 100;
+  document.getElementById('story-progress-fill').style.width = `${pct}%`;
+
   renderRightPanelChart(activeFamilyIdx);
+
+  // Auto-rotate on step 0 only — stops permanently on first user interaction
+  stopIdleAutoRotate();
+  if (currentStep === 0) startIdleAutoRotate();
 }
 
 function initStoryPanel() {
@@ -1916,6 +1981,7 @@ function setMode(mode) {
   document.getElementById('right-column').classList.toggle('story-mode', mode === 'story');
 
   if (mode === 'explore') {
+    stopIdleAutoRotate();
     highlightLabelSet = null;
     setHighlightLabel(-1);
     setLockedIdx(-1);
