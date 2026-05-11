@@ -14,7 +14,7 @@ Each story step has a `content` array of blocks. The step-level `colorBy`, `came
 {
   "colorBy": "avg_rating",
   "camera": { "position": [...], "target": [...] },
-  "highlight": { "family": "avg_rating", "label": "5 stars" },
+  "highlight": "5 stars",
   "content": [
     { "type": "text", "style": "heading", "value": "The 5-Star Split" },
     { "type": "text", "style": "body", "value": "Paragraph text here." },

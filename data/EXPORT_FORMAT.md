@@ -1,15 +1,24 @@
 # Export Format
 
-Output of `pipeline/export.py`. Copied to `site/data/` automatically unless `--no-copy` is passed.
+Output of `pipeline/export.py`. Copied to `site/data/` automatically unless `--no-copy` is passed. `recipe_metrics/` and `category_metrics/` are copied from `artifacts/` if present (requires the `metrics` pipeline step to have been run first).
 
 ```
 export/
-  meta.json                     manifest + schema
-  geometry.drc                  Draco point cloud, positions only
-  attributes.bin.gz             packed per-point attribute arrays
+  meta.json                           manifest + schema
+  geometry.drc                        Draco point cloud, positions only
+  attributes.bin.gz                   packed per-point attribute arrays
   chunks/
-    chunk_000000.json.gz        N_CHUNKS files, up to CHUNK_SIZE recipes each
+    chunk_000000.json.gz              N_CHUNKS files, up to CHUNK_SIZE recipes each
     chunk_000001.json.gz
+    ...
+  recipe_metrics/
+    00.json.gz                        100 shard files (00..99) keyed by last 2 digits of recipe ID
+    01.json.gz
+    ...
+  category_metrics/
+    index.json                        maps (family, label) to filename
+    avg_rating_no-rating.json.gz      one file per category
+    cuisines_american.json.gz
     ...
 ```
 
@@ -136,3 +145,84 @@ Chunk contents are derived from `RAW_recipes.jsonl` (base fields) merged with an
 Points are Z-order sorted before chunking, so spatially nearby UMAP points land in the same chunk. In practice, hovering over a region of the visualization loads one or two chunks.
 
 Use the `chunk_id` from `attributes.bin.gz` to find a recipe's chunk. Do not recompute it from the point index.
+
+---
+
+## recipe_metrics/{shard}.json.gz
+
+100 gzip-compressed JSON files, sharded by the last 2 digits of the recipe ID (`00` through `99`). Each file is a JSON object keyed by recipe ID string.
+
+```json
+{
+  "228132": {
+    "avg_rating": 5.0,
+    "n_reviews": 14,
+    "n_ratings": 13,
+    "count_5": 13,
+    "count_4": 0,
+    "count_3": 0,
+    "count_2": 0,
+    "count_1": 0,
+    "n_per_year": { "2007": 3, "2008": 5 }
+  },
+  "228134": {},
+  ...
+}
+```
+
+| Field | Notes |
+|-------|-------|
+| `avg_rating` | Mean of non-zero ratings |
+| `n_reviews` | Total interactions including 0-rated |
+| `n_ratings` | Interactions with rating > 0 |
+| `count_1..count_5` | Per-star rating counts |
+| `n_per_year` | All interactions by year (including 0-rated) |
+
+Recipes with no interactions are stored as `{}`. Shard for a recipe: last 2 characters of the ID string (e.g. recipe `228132` is in `32.json.gz`).
+
+---
+
+## category_metrics/index.json
+
+Plain JSON (not compressed). Maps each `(family, label)` pair to its filename for direct client-side lookup without string manipulation.
+
+```json
+{
+  "avg_rating": {
+    "no rating":  "avg_rating_no-rating.json.gz",
+    "1 star":     "avg_rating_1-star.json.gz",
+    "4.5 stars":  "avg_rating_4.5-stars.json.gz",
+    ...
+  },
+  "cuisines": {
+    "american":   "cuisines_american.json.gz",
+    ...
+  }
+}
+```
+
+---
+
+## category_metrics/{family}_{slug}.json.gz
+
+One gzip-compressed JSON file per category. The filename is derived by slugifying the label (`" "` to `"-"`, `"+"` to `"plus"`, `"<"` to `"lt"`).
+
+```json
+{
+  "family": "cuisines",
+  "category": "american",
+  "recipe_count": 30412,
+  "reviews_per_year": { "2003": 812, "2004": 2341 },
+  "avg_rating": 4.21,
+  "total_reviews": 94832,
+  "ingredients": { "butter": 8423, "salt": 7901, "garlic": 6244 }
+}
+```
+
+| Field | Notes |
+|-------|-------|
+| `recipe_count` | Recipes assigned to this category |
+| `reviews_per_year` | All interactions by year (including 0-rated) |
+| `avg_rating` | Mean of non-zero ratings across the category |
+| `total_reviews` | Total interactions including 0-rated |
+| `ingredients` | Ingredient occurrence counts across all recipes in the category, sorted descending |

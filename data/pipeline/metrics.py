@@ -180,6 +180,15 @@ def compute_category_summaries(families, classes, recipes: pd.DataFrame, interac
     print("Building recipe -> ingredients lookup ...")
     recipe_ingredients = dict(zip(recipes["id"].astype(int), recipes["ingredients"]))
 
+    # Pre-build secondary bin lookups for distribution metrics.
+    # Skipped gracefully if a family is absent (e.g. pipeline not fully run).
+    SEC_FAMILIES = ["minutes", "n_ingredients", "n_steps", "n_ratings", "avg_rating", "submitted", "cuisines", "meal_types"]
+    sec_lookups = {
+        name: {e["id"]: e["category"] for e in families[name] if e.get("category") is not None}
+        for name in SEC_FAMILIES
+        if name in families
+    }
+
     print("Computing per-category summaries ...")
     summaries = {}
 
@@ -189,7 +198,6 @@ def compute_category_summaries(families, classes, recipes: pd.DataFrame, interac
         for rid, cat in rid_to_cat.items():
             cat_to_rids[cat].append(rid)
 
-        # Attach category label to interactions for this family, drop unmatched recipes
         fam_iact = interactions.assign(category=interactions["recipe_id"].map(rid_to_cat))
         fam_iact = fam_iact.dropna(subset=["category"])
 
@@ -199,13 +207,29 @@ def compute_category_summaries(families, classes, recipes: pd.DataFrame, interac
             .groupby(["category", "year"])
             .size()
         )
-        # Exclude rating == 0: Food.com uses 0 to mean "no rating given"
         avg_ratings_ser = (
             fam_iact[fam_iact["rating"] > 0]
             .groupby("category")["rating"]
             .mean()
         )
         total_reviews_ser = fam_iact.groupby("category").size()
+
+        rated = fam_iact[fam_iact["rating"] > 0].copy()
+        rated["rating"] = rated["rating"].astype(int)
+        star_counts_ser = rated.groupby(["category", "rating"]).size()
+
+        # Secondary bin distributions (minutes, n_ingredients, n_steps)
+        sec_dists = {}
+        for sec_name, sec_lookup in sec_lookups.items():
+            sec_classes = classes.get(sec_name, [])
+            if not sec_classes:
+                continue
+            all_rids = list(rid_to_cat.keys())
+            df = pd.DataFrame({
+                "primary":   [rid_to_cat[r] for r in all_rids],
+                "secondary": [sec_lookup.get(r) for r in all_rids],
+            }).dropna(subset=["secondary"])
+            sec_dists[sec_name] = (df.groupby(["primary", "secondary"]).size(), sec_classes)
 
         family_classes = classes.get(family, sorted(cat_to_rids.keys()))
 
@@ -220,22 +244,42 @@ def compute_category_summaries(families, classes, recipes: pd.DataFrame, interac
             avg_rating = round(float(avg_ratings_ser[cat]), 4) if cat in avg_ratings_ser.index else None
             total = int(total_reviews_ser[cat]) if cat in total_reviews_ser.index else 0
 
+            try:
+                sc = star_counts_ser[cat]
+                count_1, count_2, count_3, count_4, count_5 = (int(sc.get(s, 0)) for s in [1, 2, 3, 4, 5])
+            except KeyError:
+                count_1 = count_2 = count_3 = count_4 = count_5 = 0
+
             ingredient_counts = defaultdict(int)
             for rid in rids:
                 for ing in recipe_ingredients.get(rid, []):
                     ingredient_counts[ing] += 1
 
-            summaries[(family, cat)] = {
-                "family": family,
-                "category": cat,
+            summary = {
+                "family":       family,
+                "category":     cat,
                 "recipe_count": len(rids),
-                "reviews_per_year": dict(sorted(rpy.items())),
-                "avg_rating": avg_rating,
-                "total_reviews": total,
-                "ingredients": dict(
-                    sorted(ingredient_counts.items(), key=lambda x: -x[1])
-                ),
+                "reviews": {
+                    "avg_rating":    avg_rating,
+                    "total_reviews": total,
+                    "count_5":       count_5,
+                    "count_4":       count_4,
+                    "count_3":       count_3,
+                    "count_2":       count_2,
+                    "count_1":       count_1,
+                    "n_per_year":    dict(sorted(rpy.items())),
+                },
+                "ingredients": dict(sorted(ingredient_counts.items(), key=lambda x: -x[1])),
             }
+
+            for sec_name, (ct, sec_classes) in sec_dists.items():
+                try:
+                    sc_ser = ct[cat]
+                    summary[sec_name] = {lbl: int(sc_ser.get(lbl, 0)) for lbl in sec_classes}
+                except KeyError:
+                    summary[sec_name] = {lbl: 0 for lbl in sec_classes}
+
+            summaries[(family, cat)] = summary
             print(f"  [{family}] {cat}: {len(rids)} recipes")
 
     return summaries

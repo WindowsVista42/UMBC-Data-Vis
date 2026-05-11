@@ -6,11 +6,7 @@ An interactive 3D visualization of ~230K Food.com recipes where proximity reflec
 
 ## Dataset
 
-[Food.com Recipes and User Interactions](https://www.kaggle.com/datasets/shuyangli94/food-com-recipes-and-user-interactions)
-
-## How it works
-
-[Read it here](HOW_IT_WORKS.md)
+[Food.com Recipes and Interactions](https://www.kaggle.com/datasets/shuyangli94/food-com-recipes-and-user-interactions)
 
 ## Project structure
 
