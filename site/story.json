@@ -6,8 +6,9 @@
       "highlight": null,
       "categorySubtitle": "30+ regional cuisines",
       "content": [
-        { "type": "text", "style": "heading", "value": "230,000+ Recipes" },
-        { "type": "text", "style": "body", "value": "Each point is a recipe from Food.com, projected into 3D by semantic similarity. Recipes with similar ingredients and techniques cluster together." }
+        { "type": "text", "style": "heading", "value": "Welcome!" },
+        { "type": "text", "style": "body", "value": "This is a visualization showing ~230,000 recipes from Food.com! Every point represents a recipe organized by its similarity to other recipes. When you organize data like this, some interesting things pop out that we want to tell you about! When you're ready, click next to see more, or you can click \"Explore\" at the top to freely look around." },
+        { "type": "text", "style": "caption", "value": "Have fun!" }
       ]
     },
     {

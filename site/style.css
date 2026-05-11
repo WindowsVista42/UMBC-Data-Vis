@@ -304,6 +304,8 @@ html, body {
   flex: 1;
   padding: 10px 12px;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
 }
 
@@ -874,6 +876,7 @@ html, body {
   align-items: baseline;
   gap: 4px;
   padding-bottom: 8px;
+  flex-shrink: 0;
 }
 
 .chart-stat-avg {

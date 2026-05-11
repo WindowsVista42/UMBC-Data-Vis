@@ -996,11 +996,12 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
 
   // For unordered categorical families, sort bars by displayed count descending
   const SORT_BY_COUNT = new Set(['cuisines', 'meal_types']);
+  // For ordered families that read better high→low, reverse natural order
+  const REVERSE_ORDER = new Set(['avg_rating']);
   const renderOrder = SORT_BY_COUNT.has(family.name)
-    ? (() => {
-        return Array.from({length: labels.length}, (_, i) => i)
-          .sort((a, b) => counts[b] - counts[a]);
-      })()
+    ? Array.from({length: labels.length}, (_, i) => i).sort((a, b) => counts[b] - counts[a])
+    : REVERSE_ORDER.has(family.name)
+    ? Array.from({length: labels.length}, (_, i) => labels.length - 1 - i)
     : Array.from({length: labels.length}, (_, i) => i);
 
   const W = container.offsetWidth || 300;
@@ -1596,25 +1597,22 @@ async function showRecipeChartInPanel(recipeId, tabId, title) {
 
   showLeftPanelChart(title, body => {
     if (tabId === 'ratings') {
-      const idxMap = { '1 star': 1, '2 stars': 2, '3 stars': 3, '4 stars': 4, '5 stars': 7 };
-      const labels = ['1 star', '2 stars', '3 stars', '4 stars', '5 stars'];
-      const counts = [metrics.count_1, metrics.count_2, metrics.count_3, metrics.count_4, metrics.count_5];
-      const colors = labels.map(lbl => {
-        const avgFam = meta?.categories.find(c => c.name === 'avg_rating');
-        const li = idxMap[lbl];
-        if (!avgFam || li == null) return '#4e79a7';
-        const [r, g, b] = getPaletteRgb(li);
-        return `rgb(${r},${g},${b})`;
-      });
       const stat = document.createElement('div');
       stat.className = 'chart-stat-header';
       stat.innerHTML =
-        `<span class="chart-stat-avg">${metrics.avg_rating?.toFixed(1) ?? '—'}</span>` +
-        `<span class="chart-stat-meta"> · ${(metrics.n_ratings ?? 0).toLocaleString()} ratings</span>`;
+        `<span class="chart-stat-avg">★ ${metrics.avg_rating?.toFixed(1) ?? '—'}</span>` +
+        `<span class="chart-stat-meta"> · ${(metrics.n_ratings ?? 0).toLocaleString()} ratings · ${(metrics.n_reviews ?? 0).toLocaleString()} reviews</span>`;
       body.appendChild(stat);
+
       const chartEl = document.createElement('div');
+      chartEl.style.cssText = 'flex:1;min-height:0;overflow:hidden;';
       body.appendChild(chartEl);
-      renderChart(chartEl, { chartType: 'histogram', labels, counts, colors, yLabel: 'Ratings' }, null);
+
+      const noRating = Math.max(0, (metrics.n_reviews ?? 0) - (metrics.n_ratings ?? 0));
+      const labels = ['5', '4', '3', '2', '1', 'No Rating'];
+      const counts = [metrics.count_5, metrics.count_4, metrics.count_3, metrics.count_2, metrics.count_1, noRating];
+      renderRecipeHorizontalBars(chartEl, labels, counts, 'rgba(212,175,55,0.80)', 'Rating', 0);
+
     } else if (tabId === 'reviews') {
       const labels = [], counts = [];
       for (let y = REVIEWS_YEAR_MIN; y <= REVIEWS_YEAR_MAX; y++) {
@@ -1622,7 +1620,81 @@ async function showRecipeChartInPanel(recipeId, tabId, title) {
         counts.push(metrics.n_per_year?.[y] ?? 0);
       }
       const colors = resolveDistColors('submitted', labels);
-      renderChart(body, { chartType: 'histogram', labels, counts, colors, yLabel: 'Reviews' }, null);
+      renderRecipeHorizontalBars(body, labels, counts, colors, 'Year', 20);
+    }
+  });
+}
+
+function renderRecipeHorizontalBars(container, labels, counts, barColor, colLabel, vertPad = 0) {
+  const W = container.offsetWidth || 280;
+  const TOP_H = 18;
+  const containerH = Math.max(0, (container.clientHeight || 0) - vertPad - TOP_H);
+  const MIN_ROW_H = 18;
+  const rowH = containerH > 0 ? Math.max(MIN_ROW_H, containerH / labels.length) : MIN_ROW_H;
+
+  const _ctx = document.createElement('canvas').getContext('2d');
+  _ctx.font = '11px "Source Serif 4", serif';
+  const maxTextW = Math.max(...labels.map(l => _ctx.measureText(l).width));
+  const labelW = Math.max(20, Math.ceil(maxTextW) + 12);
+  const barGap = 6;
+  const countPad = 40;
+  const barMaxW = W - labelW - barGap - countPad;
+  const maxCount = Math.max(...counts, 1);
+  const H = rowH * labels.length;
+
+  container.innerHTML = '';
+  const svg = d3.select(container).append('svg')
+    .attr('width', W).attr('height', TOP_H + H)
+    .style('display', 'block').style('overflow', 'visible');
+
+  const FONT = '"Source Serif 4", serif';
+  const TEXT_DIM = 'rgba(255,255,255,0.72)';
+
+  svg.append('defs').append('clipPath').attr('id', 'rhb-label-clip')
+    .append('rect').attr('x', 0).attr('y', 0).attr('width', labelW - 2).attr('height', TOP_H + H);
+
+  // Column headers
+  svg.append('text')
+    .attr('x', labelW - 6).attr('y', TOP_H - 6)
+    .attr('text-anchor', 'end').attr('font-size', '10px').attr('font-family', FONT)
+    .attr('fill', 'rgba(255,255,255,0.40)').text(`↓ ${colLabel}`);
+  svg.append('text')
+    .attr('x', labelW + (barGap - 6) / 2).attr('y', TOP_H - 6)
+    .attr('text-anchor', 'middle').attr('font-size', '10px').attr('font-family', FONT)
+    .attr('fill', 'rgba(255,255,255,0.25)').text('|');
+  svg.append('text')
+    .attr('x', labelW + barGap).attr('y', TOP_H - 6)
+    .attr('text-anchor', 'start').attr('font-size', '10px').attr('font-family', FONT)
+    .attr('fill', 'rgba(255,255,255,0.40)').text('Count →');
+
+  labels.forEach((label, i) => {
+    const count = counts[i];
+    const barW = count > 0 ? Math.max(2, (count / maxCount) * barMaxW) : 0;
+    const y = TOP_H + i * rowH;
+    const g = svg.append('g').attr('transform', `translate(0,${y})`);
+
+    g.append('text')
+      .attr('clip-path', 'url(#rhb-label-clip)')
+      .attr('x', labelW - 6).attr('y', rowH / 2)
+      .attr('text-anchor', 'end').attr('dominant-baseline', 'middle')
+      .attr('font-size', '11px').attr('font-family', FONT)
+      .attr('fill', TEXT_DIM).text(label);
+
+    if (barW > 0) {
+      const fill = Array.isArray(barColor) ? barColor[i] : barColor;
+      g.append('rect')
+        .attr('x', labelW + barGap).attr('y', 2)
+        .attr('width', barW).attr('height', rowH - 4)
+        .attr('rx', 2).attr('fill', fill).attr('opacity', 0.88);
+    }
+
+    if (count > 0) {
+      g.append('text')
+        .attr('x', labelW + barGap + barW + 4).attr('y', rowH / 2)
+        .attr('dominant-baseline', 'middle')
+        .attr('font-size', '10px').attr('font-family', FONT)
+        .attr('fill', 'rgba(255,255,255,0.52)')
+        .text(count >= 1000 ? d3.format('.2s')(count) : count);
     }
   });
 }
