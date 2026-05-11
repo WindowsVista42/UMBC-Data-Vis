@@ -1437,16 +1437,28 @@ function randomizeRecipe() {
   showRecipeInfo(idx);
 }
 
+function positionRandomize(anchorEl) {
+  const btn = document.getElementById('btn-randomize');
+  if (!btn || btn.style.display === 'none') return;
+  requestAnimationFrame(() => {
+    const rect = anchorEl.getBoundingClientRect();
+    btn.style.top = `${rect.bottom + 6}px`;
+    btn.style.width = `${rect.width}px`;
+  });
+}
+
 function showExploreDefault() {
   document.getElementById('left-panel').style.display = 'none';
   document.getElementById('explore-default').style.display = 'flex';
   document.getElementById('recipe-chart-btns').style.display = 'none';
   hideLeftPanelChart();
+  positionRandomize(document.getElementById('explore-default'));
 }
 
 function showRecipeInfo(idx) {
   document.getElementById('explore-default').style.display = 'none';
   document.getElementById('left-panel').style.display = 'flex';
+  positionRandomize(document.getElementById('left-panel'));
   document.getElementById('explore-content').style.display = 'block';
   document.getElementById('explore-recipe').style.display = 'block';
   hideLeftPanelChart();

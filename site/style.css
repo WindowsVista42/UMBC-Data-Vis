@@ -353,8 +353,8 @@ html, body {
 #btn-randomize {
   display: none;
   position: fixed;
-  left: calc(var(--panel-gap) + var(--left-panel-w) + 8px);
-  top: calc(var(--topbar-h) + var(--panel-gap));
+  left: var(--panel-gap);
+  width: var(--left-panel-w);
   font-size: var(--fs-label);
   padding: 9px 12px;
   background: var(--panel-bg);
