@@ -875,6 +875,13 @@ function onResize() {
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   if (lockedIdx >= 0) positionHoverTip(lockedIdx);
+  const btn = document.getElementById('btn-randomize');
+  if (btn && btn.style.display !== 'none') {
+    const anchor = document.getElementById('left-panel')?.style.display !== 'none'
+      ? document.getElementById('left-panel')
+      : document.getElementById('explore-default');
+    if (anchor) positionRandomize(anchor);
+  }
 }
 
 // ── Render loop ───────────────────────────────────────────────────────────────
