@@ -2013,6 +2013,10 @@ function applyStep(step) {
   uniforms.uSecDimFactor.value     = 1.0;
   uniforms.uSecOutlineFactor.value = 0.0;
 
+  // Clear locked recipe from previous step
+  setLockedIdx(-1);
+  hideHoverTip();
+
   // Switch category family
   if (step.colorBy) {
     const idx = meta.categories.findIndex(c => c.name === step.colorBy);
@@ -2058,6 +2062,14 @@ function applyStep(step) {
       el.className = 'story-description';
       el.textContent = block.value || '';
       contentEl.appendChild(el);
+    } else if (block.type === 'link') {
+      const el = document.createElement('a');
+      el.className = 'story-link';
+      el.textContent = block.value || 'View';
+      el.href = block.href || '#';
+      el.target = '_blank';
+      el.rel = 'noopener noreferrer';
+      contentEl.appendChild(el);
     } else if (block.type === 'chart' && block.placement === 'inline') {
       const wrap = document.createElement('div');
       wrap.className = 'story-chart-inline';
@@ -2076,6 +2088,15 @@ function applyStep(step) {
   document.getElementById('story-progress-fill').style.width = `${pct}%`;
 
   renderRightPanelChart(activeFamilyIdx);
+
+  // Lock a specific recipe point if the step requests it
+  if (step.lockedRecipe != null) {
+    const idx = step.lockedRecipe;
+    if (idx >= 0 && idx < N) {
+      setLockedIdx(idx);
+      showHoverTip(idx);
+    }
+  }
 
   // Auto-rotate on step 0 only — stops permanently on first user interaction
   stopIdleAutoRotate();
