@@ -1094,6 +1094,32 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
         .attr('fill', 'transparent')
         .style('cursor', (isSelected(li) || !hasSelection) ? 'pointer' : 'default')
         .on('mouseenter', () => {
+          if (appMode === 'story') {
+            // 1 selection: disable hover entirely
+            if (hasSelection && (highlightLabelSet == null || highlightLabelSet.size < 2)) return;
+            const hoverModes = Array.from(categoryModes);
+            for (let i = 0; i < MAX_LABELS; i++) {
+              if (hoverModes[i] === 0 && i !== li) hoverModes[i] = 2;
+            }
+            uniforms.uCategoryModes.value = hoverModes;
+            const hasMultiSelection = highlightLabelSet != null && highlightLabelSet.size >= 2;
+            const liHighlighted = !hasMultiSelection || isSelected(li);
+            barRects.forEach((rect, idx) => {
+              if (!hasMultiSelection) {
+                rect.attr('opacity', idx === li ? 1.0 : 0.28);
+              } else {
+                if (idx === li && isSelected(li)) rect.attr('opacity', 1.0);
+                else if (isSelected(idx))         rect.attr('opacity', 0.28);
+                else                              rect.attr('opacity', 0.10);
+              }
+            });
+            labelTexts.forEach((text, idx) => {
+              const bold = idx === li && liHighlighted;
+              text.attr('fill', bold ? TEXT_BODY : TEXT_DIM);
+              text.attr('font-weight', bold ? '600' : '400');
+            });
+            return;
+          }
           if (appMode !== 'explore') return;
           // L2 locked → no hover anywhere
           if (filterLevel >= 2) return;
@@ -1131,6 +1157,17 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
           showPhantomChip(familyIdx, li);
         })
         .on('mouseleave', () => {
+          if (appMode === 'story') {
+            uniforms.uCategoryModes.value = Array.from(categoryModes);
+            barRects.forEach((rect, idx) => {
+              rect.attr('opacity', baseOpacity(idx));
+            });
+            labelTexts.forEach((text, idx) => {
+              text.attr('fill', (isSelected(idx) || !hasSelection) ? TEXT_BODY : TEXT_DIM);
+              text.attr('font-weight', isSelected(idx) ? '600' : '400');
+            });
+            return;
+          }
           if (appMode !== 'explore') return;
           if (filterLevel >= 2) return;
           if (filterLevel === 1 && isL1Chart) return;
