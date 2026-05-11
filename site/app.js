@@ -470,22 +470,36 @@ function setActiveFamily(idx) {
     renderRightPanelChart(idx);
   } else if (filterLevel === 1) {
     if (idx === activeFamilyIdx) {
-      // User clicked back to L1 family tab — show full L1 chart with selection visible
       level2FamilyIdx = -1;
       renderRightPanelChart(idx);
+      updateTabVisualState();
     } else {
       level2FamilyIdx = idx;
       const filteredCounts = computeFilteredCounts(idx, activeFamilyIdx, level1LabelIdx);
       renderRightPanelChart(idx, filteredCounts);
+      updateTabVisualState();
     }
   } else if (filterLevel === 2) {
-    level2FamilyIdx = idx;
-    level2LabelIdx = -1;
-    filterLevel = 1;
-    restoreIntersectionHighlight();
-    const filteredCounts = computeFilteredCounts(idx, activeFamilyIdx, level1LabelIdx);
-    renderRightPanelChart(idx, filteredCounts);
-    renderFilterChips();
+    if (idx === activeFamilyIdx) {
+      // Clicking L1 family tab — stay at L2, show full L1 chart
+      renderRightPanelChart(activeFamilyIdx);
+      updateTabVisualState();
+    } else if (idx === level2FamilyIdx) {
+      // Clicking current L2 family tab — re-show the L2 filtered chart
+      const filteredCounts = computeFilteredCounts(idx, activeFamilyIdx, level1LabelIdx);
+      renderRightPanelChart(idx, filteredCounts);
+      updateTabVisualState();
+    } else {
+      // Switching to a different L2 family — clear L2 selection, drop to L1
+      level2FamilyIdx = idx;
+      level2LabelIdx = -1;
+      filterLevel = 1;
+      restoreIntersectionHighlight();
+      const filteredCounts = computeFilteredCounts(idx, activeFamilyIdx, level1LabelIdx);
+      renderRightPanelChart(idx, filteredCounts);
+      renderFilterChips();
+      updateTabVisualState();
+    }
   }
 }
 
@@ -980,13 +994,12 @@ function renderRightPanelChart(familyIdx, scopedCounts) {
   const labels = family.labels;
   const maxCount = Math.max(...counts, 1);
 
-  // For unordered categorical families, sort bars by global count descending
+  // For unordered categorical families, sort bars by displayed count descending
   const SORT_BY_COUNT = new Set(['cuisines', 'meal_types']);
   const renderOrder = SORT_BY_COUNT.has(family.name)
     ? (() => {
-        const global = computeFullCounts(familyIdx);
         return Array.from({length: labels.length}, (_, i) => i)
-          .sort((a, b) => global[b] - global[a]);
+          .sort((a, b) => counts[b] - counts[a]);
       })()
     : Array.from({length: labels.length}, (_, i) => i);
 
