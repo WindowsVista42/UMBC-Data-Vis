@@ -2,7 +2,7 @@
 
 An interactive 3D visualization of ~230K Food.com recipes where proximity reflects semantic similarity. Recipes are embedded with a sentence transformer, classified into categories via k-NN, and combined with numeric features before being projected into 3D with UMAP. The website takes this data and renders it as a navigable 3D point cloud, with category-based coloring and filtering, on-hover recipe details, and per-recipe breakdowns drawn from the ~1.1M user interactions.
 
-**Live versions:** [Alpha](https://windowsvista42.github.io/recipe_vis) | [Beta](https://windowsvista42.github.io/recipe_vis2/)
+**Live versions:** [Alpha](https://windowsvista42.github.io/recipe_vis) | [Beta](https://windowsvista42.github.io/recipe_vis2/) | [Final](https://windowsvista42.github.io/recipe_explorer)
 
 ## Dataset
 
