@@ -303,7 +303,8 @@ html, body {
 #left-panel-chart-body {
   flex: 1;
   padding: 10px 12px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -913,6 +914,18 @@ html, body {
   color: var(--text-muted);
   margin-bottom: 8px;
 }
+
+.story-link {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: var(--fs-secondary);
+  color: var(--text-dim);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+  padding-bottom: 1px;
+  transition: color 0.12s, border-color 0.12s;
+}
+.story-link:hover { color: var(--text-secondary); border-color: rgba(255,255,255,0.35); }
 
 .story-description {
   font-size: var(--fs-secondary);
