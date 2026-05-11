@@ -2,7 +2,7 @@
 
 This folder contains the full data pipeline for the Food.com Recipe Explorer. It takes the raw Kaggle dataset and produces the data that the Three.js web app loads from `site/data/`.
 
-The dataset is sourced from Kaggle: [Food.com Recipes and User Interactions](https://www.kaggle.com/datasets/shuyangli94/food-com-recipes-and-user-interactions). It contains around 230k recipes and 1.1 million user interactions collected from Food.com.
+The dataset is sourced from Kaggle: [Food.com Recipes and Interactions](https://www.kaggle.com/datasets/shuyangli94/food-com-recipes-and-user-interactions). It contains around 230k recipes and 1.1 million user interactions collected from Food.com.
 
 The two files we care about are:
 
